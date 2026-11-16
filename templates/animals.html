@@ -15,8 +15,9 @@
   <label>Species<select name="species"><option value="">All species</option><option{% if request.GET.species == 'Dog' %} selected{% endif %}>Dog</option><option{% if request.GET.species == 'Cat' %} selected{% endif %}>Cat</option><option{% if request.GET.species == 'Rabbit' %} selected{% endif %}>Rabbit</option><option{% if request.GET.species == 'Other' %} selected{% endif %}>Other</option></select></label>
   <label>Breed<input name="breed" value="{{ request.GET.breed }}"></label>
   <label>Sex<select name="sex"><option value="">All</option><option{% if request.GET.sex == 'Male' %} selected{% endif %}>Male</option><option{% if request.GET.sex == 'Female' %} selected{% endif %}>Female</option><option{% if request.GET.sex == 'Unknown' %} selected{% endif %}>Unknown</option></select></label>
-  {% if not public %}<label>Status<select name="status"><option value="">All statuses</option><option{% if request.GET.status == 'Available' %} selected{% endif %}>Available</option><option{% if request.GET.status == 'Pending Adoption' %} selected{% endif %}>Pending Adoption</option><option{% if request.GET.status == 'Not Available' %} selected{% endif %}>Not Available</option></select></label>{% endif %}
+  {% if not public %}<label>Status<select name="status"><option value="">All statuses</option><option{% if request.GET.status == 'Available' %} selected{% endif %}>Available</option><option{% if request.GET.status == 'Pending Adoption' %} selected{% endif %}>Pending Adoption</option><option{% if request.GET.status == 'Not Available' %} selected{% endif %}>Not Available</option><option{% if request.GET.status == 'Euthanized' %} selected{% endif %}>Euthanized</option></select></label>{% endif %}
   <input type="hidden" name="sort" value="{{ sort }}">
+  {% if can_archive %}<label class="archive-filter"><input type="checkbox" name="include_archived" value="1"{% if include_archived %} checked{% endif %}> Include archived records</label>{% endif %}
   <div class="filter-actions"><button class="button primary">Search</button><a class="button ghost" href="{% url 'animals' %}">Clear</a></div>
 </form>
 
@@ -28,6 +29,7 @@
     {% if request.GET.breed %}<input type="hidden" name="breed" value="{{ request.GET.breed }}">{% endif %}
     {% if request.GET.sex %}<input type="hidden" name="sex" value="{{ request.GET.sex }}">{% endif %}
     {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
+    {% if include_archived %}<input type="hidden" name="include_archived" value="1">{% endif %}
     <label for="sort">Sort by</label>
     <select id="sort" name="sort">
       <option value="name_asc"{% if sort == 'name_asc' %} selected{% endif %}>Name (A–Z)</option>

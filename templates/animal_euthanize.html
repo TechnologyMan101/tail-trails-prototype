@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Confirm euthanized status · {{ org.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">Permanent record change</span><h1>Confirm euthanized status</h1><p>{{ animal.name }} · {{ animal.animal_id }}</p></div></div>
+{% if animal.status == 'Euthanized' %}
+<div class="flash">This status has already been permanently confirmed.</div>
+{% else %}
+<section class="panel"><p>This records that {{ animal.name }} was euthanized. Once confirmed, the status cannot be changed back, including by administrators. The animal will no longer appear on public adoption pages. Archiving remains a separate, reversible choice.</p>
+<form method="post" class="confirmation-form">{% csrf_token %}{{ form.non_field_errors }}
+<label class="confirmation-check">{{ form.confirm }}<span>{{ form.confirm.label }}</span></label>{{ form.confirm.errors }}
+<label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>{{ form.password }}{{ form.password.errors }}
+<div class="form-footer"><a class="button ghost" href="{% url 'animal_profile' animal.pk %}">Cancel</a><button class="button danger" type="submit">Permanently confirm euthanized status</button></div>
+</form></section>
+{% endif %}
+{% endblock %}

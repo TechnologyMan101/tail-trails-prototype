@@ -21,10 +21,21 @@ class PhotoInline(admin.TabularInline):
         return format_html('<a href="{}">Download original</a>', reverse("original_photo", args=["animal", obj.pk]))
 @admin.register(Animal)
 class AnimalAdmin(admin.ModelAdmin):
-    list_display = ("animal_id", "name", "species", "status", "held_at")
+    list_display = ("animal_id", "name", "species", "status", "is_archived", "held_at")
     search_fields = ("animal_id", "name", "breed")
-    list_filter = ("species", "status", "held_at")
+    list_filter = ("species", "status", "is_archived", "held_at")
     inlines = [PhotoInline]
+    readonly_fields = ("euthanized_at", "euthanized_by")
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if "status" in form.base_fields:
+            if obj and obj.status == "Euthanized":
+                form.base_fields["status"].disabled = True
+            else:
+                form.base_fields["status"].choices = [(value, label) for value, label in Animal.STATUSES if value != "Euthanized"]
+                form.base_fields["status"].help_text = "Use the animal edit page to confirm euthanasia with your password."
+        return form
 
 @admin.register(SubmissionPhoto)
 class SubmissionPhotoAdmin(admin.ModelAdmin):

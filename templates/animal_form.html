@@ -6,6 +6,7 @@
   {% if animal %}<span class="id-chip">{{ animal.animal_id }}</span>{% endif %}
 </div>
 {% if resumable_batch %}<div class="flash"><strong>Unfinished photo crop:</strong> this animal has {{ resumable_batch.photos.count }} successfully uploaded photo{{ resumable_batch.photos.count|pluralize }} waiting to be cropped. <a class="text-link" href="{% url 'photo_batch_crop' resumable_batch.pk %}">Resume cropping →</a></div>{% endif %}
+{% if animal and animal.status != 'Euthanized' %}<div class="panel"><strong>Record euthanasia</strong><p>This permanent status change requires a separate confirmation and your current password.</p><a class="button danger" href="{% url 'animal_euthanize' animal.pk %}">Record euthanized status…</a></div>{% endif %}
 
 <form class="stack-form" method="post" enctype="multipart/form-data" data-photo-editor>
   {% csrf_token %}

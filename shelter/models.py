@@ -66,7 +66,7 @@ class Organization(models.Model):
 
 class Animal(models.Model):
     SPECIES = [(x, x) for x in ("Dog", "Cat", "Rabbit", "Other")]
-    STATUSES = [(x, x) for x in ("Available", "Pending Adoption", "Not Available")]
+    STATUSES = [(x, x) for x in ("Available", "Pending Adoption", "Not Available", "Euthanized")]
     SEXES = [(x, x) for x in ("Male", "Female", "Unknown")]
     LOCATIONS = [(x, x) for x in ("Kennel", "Foster Home")]
     SPAY = [(x, x) for x in ("Spayed", "Neutered", "Nursing", "Unknown")]
@@ -111,12 +111,23 @@ class Animal(models.Model):
     behavior_notes = models.TextField(blank=True)
     previous_owner = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=STATUSES)
+    is_archived = models.BooleanField(default=False, help_text="Hide this record from normal search and public pages. Uncheck to restore it.")
+    euthanized_at = models.DateTimeField(null=True, blank=True, editable=False)
+    euthanized_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, editable=False, on_delete=models.PROTECT, related_name="confirmed_euthanasia_records")
     public_description = models.TextField(blank=True)
     general_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta: ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            previous = Animal.objects.filter(pk=self.pk).values("status", "euthanized_at", "euthanized_by_id").first()
+            if previous and previous["status"] == "Euthanized":
+                if self.status != "Euthanized" or self.euthanized_at != previous["euthanized_at"] or self.euthanized_by_id != previous["euthanized_by_id"]:
+                    raise ValidationError("The confirmed euthanized status and confirmation details are permanent.")
+        super().save(*args, **kwargs)
 
     def clean(self):
         errors = {}

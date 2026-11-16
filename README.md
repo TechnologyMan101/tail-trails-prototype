@@ -200,6 +200,12 @@ For HTTPS deployment:
 6. Use a strong, unique `SECRET_KEY` and database password.
 7. Keep PostgreSQL unexposed; only the application service needs to reach it.
 
+## Permanent euthanized status and record archives
+
+Employees and administrators can open **Record euthanized status** from an existing animal's edit page. A separate confirmation page requires an explicit acknowledgement and the signed-in user's current password. It records the confirming user and timestamp in the animal record and adds a history entry. Normal profile forms and Django administration cannot select this status directly. Once confirmed, the status and confirmation details cannot be reversed through model saves or database updates; migrations install PostgreSQL and SQLite protection triggers. Other profile details can still be maintained.
+
+Archiving is separate and reversible: toggle **Is archived** on the edit page and save. Archived animals disappear from normal searches, homepage features, and public profiles even if their adoption status is Available. Employees and administrators can tick **Include archived records** in animal search, open an archived record, and restore it by clearing the archive checkbox. Sorting preserves the archive filter. Volunteers cannot browse archived profiles or start new submissions for them; existing submission history remains available for review and audit. Restoring an archive never reverses a confirmed euthanized status. Existing data migrates with archiving off and no euthanasia confirmation.
+
 ## Local development and tests
 
 PostgreSQL is used in Compose. Tests can use an isolated SQLite database for speed:

@@ -91,6 +91,8 @@ def finalize_photo_batch(batch_id, user, crop_payload):
             raise ValidationError("This photo upload can no longer be finalized.")
         if timezone.now() >= batch.expires_at:
             raise ValidationError("This photo crop session has expired.")
+        if batch.workflow == PhotoUploadBatch.Workflow.VOLUNTEER and batch.animal.is_archived:
+            raise ValidationError("This animal record has been archived. Discard this upload or contact staff.")
         photos = list(batch.photos.select_for_update().order_by("position", "id"))
         if not photos:
             raise ValidationError("This upload batch contains no photos.")

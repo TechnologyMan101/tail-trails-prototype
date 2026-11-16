@@ -7,6 +7,7 @@ urlpatterns = [
     path("animals", views.animals, name="animals"), path("animals/new", views.animal_edit, name="animal_new"),
     path("animals/<int:pk>", views.animal_profile, name="animal_profile"), path("animals/<int:pk>/edit", views.animal_edit, name="animal_edit"),
     path("animals/<int:pk>/submit", views.submit_update, name="submit_update"),
+    path("animals/<int:pk>/confirm-euthanized", views.animal_euthanize, name="animal_euthanize"),
     path("submissions", views.submissions, name="submissions"), path("submissions/<int:pk>/<str:action>", views.review_submission, name="review_submission"),
     path("hours", views.volunteer_hours, name="volunteer_hours"), path("users", views.manage_users, name="users"),
     path("users/<int:pk>/toggle", views.user_toggle, name="user_toggle"), path("organization", views.organization, name="organization"),

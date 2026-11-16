@@ -26,6 +26,11 @@ class AnimalForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if self.instance.status == "Euthanized":
+            self.fields["status"].disabled = True
+            self.fields["status"].help_text = "This confirmed status is permanent."
+        else:
+            self.fields["status"].choices = [(value, label) for value, label in self.fields["status"].choices if value != "Euthanized"]
         if self.instance.pk and self.instance.photos.count() >= 5:
             self.fields["photos"].widget.attrs.update({
                 "disabled": True,
@@ -47,6 +52,21 @@ class AnimalForm(forms.ModelForm):
             if photo.size > settings.MAX_PHOTO_SIZE_MB * 1024 * 1024: raise forms.ValidationError(f"{photo.name} is larger than {settings.MAX_PHOTO_SIZE_MB} MiB.")
             validate_photo_upload(photo)
         return photos
+
+
+class EuthanasiaConfirmationForm(forms.Form):
+    confirm = forms.BooleanField(label="I confirm this animal was euthanized and understand this status cannot be reversed.")
+    password = forms.CharField(label="Your current password", strip=False, widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}))
+
+    def __init__(self, *args, user, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError("Your password is incorrect.")
+        return password
 
 
 class SubmissionForm(forms.ModelForm):

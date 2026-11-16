@@ -18,7 +18,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from .forms import AccountForm, AnimalForm, OrganizationForm, SubmissionForm, UserManageForm, VolunteerHourForm
+from .forms import AccountForm, AnimalForm, EuthanasiaConfirmationForm, OrganizationForm, SubmissionForm, UserManageForm, VolunteerHourForm
 from .branding import favicon_urls
 from .branding_images import branding_preview_bytes, delete_branding_asset, process_branding_asset, validate_branding_upload
 from .diagnostics import system_snapshot
@@ -39,7 +39,7 @@ def roles(*allowed):
     return decorator
 
 
-def home(request): return render(request, "home.html", {"animals": Animal.objects.filter(status="Available").prefetch_related("photos")[:3]})
+def home(request): return render(request, "home.html", {"animals": Animal.objects.filter(status="Available", is_archived=False).prefetch_related("photos")[:3]})
 def healthz(request): return JsonResponse({"status": "ok", "version": settings.APP_VERSION})
 
 def media_file(request, path):
@@ -74,6 +74,9 @@ def sign_out(request): logout(request); messages.success(request, "You have been
 def animals(request):
     qs = Animal.objects.prefetch_related("photos")
     public = not request.user.is_authenticated
+    can_archive = request.user.is_authenticated and (request.user.is_superuser or request.user.role in ("Administrator", "Employee"))
+    include_archived = can_archive and request.GET.get("include_archived") == "1"
+    if not include_archived: qs = qs.filter(is_archived=False)
     if public: qs = qs.filter(status="Available")
     q = request.GET.get("q", "").strip()
     if q: qs = qs.filter(Q(name__icontains=q) | Q(animal_id__icontains=q))
@@ -89,12 +92,12 @@ def animals(request):
         "id_asc": ("animal_id",),
         "id_desc": ("-animal_id",),
     }.get(sort, (Lower("name").asc(), "id"))
-    return render(request, "animals.html", {"animals": qs.order_by(*order), "public": public, "sort": sort})
+    return render(request, "animals.html", {"animals": qs.order_by(*order), "public": public, "sort": sort, "can_archive": can_archive, "include_archived": include_archived})
 
 def animal_profile(request, pk):
     animal = get_object_or_404(Animal.objects.prefetch_related("photos", "history__user"), pk=pk)
+    if animal.is_archived and not (request.user.is_authenticated and (request.user.is_superuser or request.user.role in ("Administrator", "Employee"))): raise Http404
     if not request.user.is_authenticated and animal.status != "Available":
-        from django.http import Http404
         raise Http404
     return render(request, "animal_profile.html", {"animal": animal})
 
@@ -119,6 +122,11 @@ def animal_edit(request, pk=None):
         if form.is_valid():
             try:
                 with transaction.atomic():
+                    if animal:
+                        # Recheck under lock after validation to reject stale editor saves.
+                        locked = Animal.objects.select_for_update().get(pk=animal.pk)
+                        if locked.status == "Euthanized" and form.cleaned_data.get("status") != "Euthanized":
+                            raise ValidationError("This animal was confirmed euthanized while you were editing. Reload the record.")
                     obj = form.save(commit=False)
                     if not obj.animal_id:
                         number = 1001
@@ -136,7 +144,9 @@ def animal_edit(request, pk=None):
                             photos.sort(key=lambda photo: photo.pk != chosen_id)
                         for position, photo in enumerate(photos): photo.position = position
                         AnimalPhoto.objects.bulk_update(photos, ["position"])
-                    AnimalHistory.objects.create(animal=obj, user=request.user, summary="Animal profile updated" if animal else "Animal profile created")
+                    summary = "Animal profile updated" if animal else "Animal profile created"
+                    if animal and locked.is_archived != obj.is_archived: summary += "; record archived" if obj.is_archived else "; record restored from archive"
+                    AnimalHistory.objects.create(animal=obj, user=request.user, summary=summary)
                     batch = create_photo_batch(
                         user=request.user, animal=obj, workflow=PhotoUploadBatch.Workflow.STAFF,
                         uploads=uploads, make_primary=make_new_primary,
@@ -154,9 +164,27 @@ def animal_edit(request, pk=None):
     resumable = PhotoUploadBatch.objects.filter(user=request.user, animal=animal, workflow=PhotoUploadBatch.Workflow.STAFF, status__in=(PhotoUploadBatch.Status.PENDING, PhotoUploadBatch.Status.FAILED)).first() if animal else None
     return render(request, "animal_form.html", {"form": form, "animal": animal, "selected_primary_id": selected_primary_id, "resumable_batch": resumable})
 
+@roles("Administrator", "Employee")
+def animal_euthanize(request, pk):
+    animal = get_object_or_404(Animal, pk=pk)
+    form = EuthanasiaConfirmationForm(request.POST or None, user=request.user)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            animal = Animal.objects.select_for_update().get(pk=pk)
+            if animal.status != "Euthanized":
+                animal.status = "Euthanized"
+                animal.euthanized_at = timezone.now()
+                animal.euthanized_by = request.user
+                animal.save(update_fields=["status", "euthanized_at", "euthanized_by", "updated_at"])
+                AnimalHistory.objects.create(animal=animal, user=request.user, summary="Euthanized status permanently confirmed with password verification")
+        messages.success(request, "Euthanized status permanently confirmed.")
+        return redirect("animal_profile", pk=pk)
+    return render(request, "animal_euthanize.html", {"animal": animal, "form": form})
+
+
 @roles("Volunteer")
 def submit_update(request, pk):
-    animal = get_object_or_404(Animal.objects.prefetch_related("photos"), pk=pk)
+    animal = get_object_or_404(Animal.objects.prefetch_related("photos"), pk=pk, is_archived=False)
     if request.method == "POST":
         form = SubmissionForm(request.POST, request.FILES)
         if form.is_valid():

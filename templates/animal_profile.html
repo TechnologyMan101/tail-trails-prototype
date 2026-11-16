@@ -2,6 +2,8 @@
 {% block title %}{{ animal.name }} · {{ org.name }}{% endblock %}
 {% block content %}
 <a class="back-link" href="{% url 'animals' %}">← Back to search results</a>
+{% if animal.is_archived %}<div class="flash"><strong>Archived record.</strong> Hidden from normal searches and public adoption pages. Staff can restore it on the edit page.</div>{% endif %}
+{% if animal.status == 'Euthanized' %}<div class="flash"><strong>Permanently confirmed euthanized.</strong> Confirmed {{ animal.euthanized_at }} by {{ animal.euthanized_by.full_name }}. This status cannot be reversed.</div>{% endif %}
 
 <section class="profile-hero">
   <div class="gallery {% if animal.photos.count < 2 %}single-photo-gallery{% endif %}" data-gallery>

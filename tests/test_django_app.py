@@ -49,6 +49,74 @@ class TailTrailsTests(TestCase):
 
     def login(self, user): self.client.force_login(user)
 
+    def test_euthanasia_requires_confirmation_and_correct_password(self):
+        self.login(self.employee)
+        url = reverse("animal_euthanize", args=[self.available.pk])
+        self.assertEqual(self.client.get(url).status_code, 200)
+        for data in ({"confirm": "on", "password": "wrong"}, {"password": "Trail123!"}):
+            self.assertEqual(self.client.post(url, data).status_code, 200)
+            self.available.refresh_from_db()
+            self.assertEqual(self.available.status, "Available")
+        self.assertEqual(self.client.post(url, {"confirm": "on", "password": "Trail123!"}).status_code, 302)
+        self.available.refresh_from_db()
+        self.assertEqual(self.available.status, "Euthanized")
+        self.assertEqual(self.available.euthanized_by, self.employee)
+        self.assertIsNotNone(self.available.euthanized_at)
+        self.assertTrue(self.available.history.filter(summary__icontains="password verification").exists())
+
+    def test_volunteer_cannot_confirm_euthanasia(self):
+        self.login(self.volunteer)
+        response = self.client.post(reverse("animal_euthanize", args=[self.available.pk]), {"confirm": "on", "password": "Trail123!"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_regular_editor_cannot_set_euthanized_status(self):
+        self.login(self.employee)
+        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.animal_form_data(status="Euthanized"))
+        self.assertEqual(response.status_code, 200)
+        self.available.refresh_from_db()
+        self.assertEqual(self.available.status, "Available")
+
+    def test_confirmed_status_is_permanent_in_model_and_database(self):
+        from django.core.exceptions import ValidationError
+        from django.db import DatabaseError, transaction
+        self.login(self.admin)
+        self.client.post(reverse("animal_euthanize", args=[self.available.pk]), {"confirm": "on", "password": "Trail123!"})
+        self.available.refresh_from_db()
+        self.available.status = "Available"
+        with self.assertRaises(ValidationError): self.available.save()
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            Animal.objects.filter(pk=self.available.pk).update(status="Available")
+        self.available.refresh_from_db()
+        self.assertEqual(self.available.status, "Euthanized")
+
+    def test_archived_records_are_hidden_except_staff_opt_in(self):
+        Animal.objects.filter(pk=self.available.pk).update(is_archived=True)
+        profile = reverse("animal_profile", args=[self.available.pk])
+        self.assertEqual(self.client.get(profile).status_code, 404)
+        self.assertNotContains(self.client.get(reverse("home")), "Milo")
+        self.assertEqual(len(self.client.get(reverse("animals") + "?include_archived=1").context["animals"]), 0)
+        self.login(self.volunteer)
+        self.assertEqual(self.client.get(profile).status_code, 404)
+        self.assertEqual(self.client.get(reverse("submit_update", args=[self.available.pk])).status_code, 404)
+        self.login(self.employee)
+        default = self.client.get(reverse("animals"))
+        self.assertNotIn(self.available.pk, [a.pk for a in default.context["animals"]])
+        included = self.client.get(reverse("animals") + "?include_archived=1&sort=name_desc")
+        self.assertIn(self.available.pk, [a.pk for a in included.context["animals"]])
+        self.assertContains(self.client.get(profile), "Archived record")
+
+    def test_archive_and_restore_does_not_reverse_euthanasia(self):
+        self.login(self.admin)
+        self.client.post(reverse("animal_euthanize", args=[self.available.pk]), {"confirm": "on", "password": "Trail123!"})
+        url = reverse("animal_edit", args=[self.available.pk])
+        for archived in (True, False):
+            data = self.animal_form_data(status="Available")
+            if archived: data["is_archived"] = "on"
+            self.assertEqual(self.client.post(url, data).status_code, 302)
+            self.available.refresh_from_db()
+            self.assertEqual(self.available.is_archived, archived)
+            self.assertEqual(self.available.status, "Euthanized")
+
     def animal_form_data(self, **overrides):
         data = {
             "name":"Milo", "species":"Dog", "breed":"Mix", "age":"3", "age_unit":"Years", "sex":"Male",
