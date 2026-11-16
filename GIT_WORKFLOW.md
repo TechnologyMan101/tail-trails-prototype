@@ -35,7 +35,7 @@ The root `VERSION` file is the only application-version source. Django reads it 
 For a new iteration, change only `VERSION` before testing and committing:
 
 ```bash
-printf '%s\n' '2026.11.16.9' > VERSION
+printf '%s\n' '2026.11.16.10' > VERSION
 ```
 
 Use the same value for the release commit, annotated Git tag, ZIP, and overview PDF. Do not add `APP_VERSION` to `.env` or Compose.
@@ -51,7 +51,8 @@ git switch -c release/$(cat VERSION)
 uv pip compile requirements.in --python-version 3.14 --universal --generate-hashes --output-file requirements.lock
 git status --short
 git diff --check
-DB_ENGINE=sqlite python manage.py test
+# Optional: run tests if Python and the project dependencies are installed.
+# DB_ENGINE=sqlite python manage.py test
 
 git add -A
 git commit -m "Release $(cat VERSION)"
@@ -98,7 +99,8 @@ rsync -avh --delete \
 
 git status --short
 git diff --check
-DB_ENGINE=sqlite python manage.py test
+# Optional validation when importing a pre-made ZIP; safe to skip this whole command.
+# DB_ENGINE=sqlite python manage.py test
 git add -A
 git commit -m "Release $(cat VERSION)"
 git tag -a "v$(cat VERSION)" -m "Tail Trails $(cat VERSION)"
@@ -106,6 +108,8 @@ git push origin main --follow-tags
 ```
 
 `git add -A` is intentional: it records deleted obsolete source files as well as additions and edits.
+
+The commented test command is optional when committing a pre-made ZIP. Git does not require Python, SQLite, or the application dependencies. To run the tests locally, install the project's Python version and dependencies first; SQLite support is normally included with Python. `DB_ENGINE=sqlite` applies only to that command and selects an isolated test database. It does not change `.env` or the deployed PostgreSQL database. Skip the entire command if you are only importing and committing the ZIP; removing just `DB_ENGINE=sqlite` would run the tests against the default PostgreSQL configuration.
 
 ## Generate a release ZIP from a tag
 
