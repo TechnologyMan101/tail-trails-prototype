@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Animal search · {{ org.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="eyebrow">{% if public %}Adopt{% else %}Animal records{% endif %}</span>
+    <h1>{% if public %}Meet our animals{% else %}Animal search{% endif %}</h1>
+    <p>{% if public %}Only animals currently available for adoption are shown.{% else %}Search, filter, and review animal profiles.{% endif %}</p>
+  </div>
+  {% if user.role == 'Employee' or user.role == 'Administrator' %}<a class="button primary" href="{% url 'animal_new' %}">＋ Add animal</a>{% endif %}
+</div>
+
+<form class="filter-panel" method="get">
+  <label class="search-wide">{% if public %}Search by name{% else %}Animal ID or name{% endif %}<input name="q" value="{{ request.GET.q }}"></label>
+  <label>Species<select name="species"><option value="">All species</option><option{% if request.GET.species == 'Dog' %} selected{% endif %}>Dog</option><option{% if request.GET.species == 'Cat' %} selected{% endif %}>Cat</option><option{% if request.GET.species == 'Rabbit' %} selected{% endif %}>Rabbit</option><option{% if request.GET.species == 'Other' %} selected{% endif %}>Other</option></select></label>
+  <label>Breed<input name="breed" value="{{ request.GET.breed }}"></label>
+  <label>Sex<select name="sex"><option value="">All</option><option{% if request.GET.sex == 'Male' %} selected{% endif %}>Male</option><option{% if request.GET.sex == 'Female' %} selected{% endif %}>Female</option><option{% if request.GET.sex == 'Unknown' %} selected{% endif %}>Unknown</option></select></label>
+  {% if not public %}<label>Status<select name="status"><option value="">All statuses</option><option{% if request.GET.status == 'Available' %} selected{% endif %}>Available</option><option{% if request.GET.status == 'Pending Adoption' %} selected{% endif %}>Pending Adoption</option><option{% if request.GET.status == 'Not Available' %} selected{% endif %}>Not Available</option></select></label>{% endif %}
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <div class="filter-actions"><button class="button primary">Search</button><a class="button ghost" href="{% url 'animals' %}">Clear</a></div>
+</form>
+
+<div class="results-bar">
+  <strong>{{ animals|length }} animal{{ animals|length|pluralize }}</strong>
+  <form class="sort-form" method="get">
+    {% if request.GET.q %}<input type="hidden" name="q" value="{{ request.GET.q }}">{% endif %}
+    {% if request.GET.species %}<input type="hidden" name="species" value="{{ request.GET.species }}">{% endif %}
+    {% if request.GET.breed %}<input type="hidden" name="breed" value="{{ request.GET.breed }}">{% endif %}
+    {% if request.GET.sex %}<input type="hidden" name="sex" value="{{ request.GET.sex }}">{% endif %}
+    {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
+    <label for="sort">Sort by</label>
+    <select id="sort" name="sort">
+      <option value="name_asc"{% if sort == 'name_asc' %} selected{% endif %}>Name (A–Z)</option>
+      <option value="name_desc"{% if sort == 'name_desc' %} selected{% endif %}>Name (Z–A)</option>
+      <option value="age_asc"{% if sort == 'age_asc' %} selected{% endif %}>Age (youngest first)</option>
+      <option value="age_desc"{% if sort == 'age_desc' %} selected{% endif %}>Age (oldest first)</option>
+      <option value="id_asc"{% if sort == 'id_asc' %} selected{% endif %}>Animal ID (ascending)</option>
+      <option value="id_desc"{% if sort == 'id_desc' %} selected{% endif %}>Animal ID (descending)</option>
+    </select>
+    <button class="button ghost compact" type="submit">Apply sort</button>
+  </form>
+</div>
+
+{% if animals %}<div class="animal-grid">{% for animal in animals %}{% include '_animal_card.html' %}{% endfor %}</div>{% else %}<div class="empty"><h2>No animals found</h2><p>Try clearing a filter or using a broader search.</p></div>{% endif %}
+{% endblock %}

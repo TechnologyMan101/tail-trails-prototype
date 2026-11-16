@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">{% if volunteer_view %}Your contributions{% else %}Review queue{% endif %}</span><h1>{% if volunteer_view %}My submissions{% else %}Volunteer submissions{% endif %}</h1><p>{% if volunteer_view %}Track your pending, approved, and rejected updates.{% else %}Review candidate photos and notes before they become part of the official animal record.{% endif %}</p></div></div>
+<nav class="tabs" aria-label="Submission status">{% for key,value in counts.items %}<a class="{% if status == key %}active{% endif %}" href="{% url 'submissions' %}?status={{ key }}">{{ key }} <b>{{ value }}</b></a>{% endfor %}</nav>
+<div class="submission-list">
+  {% for s in submissions %}
+    <article class="submission-card">
+      <div class="submission-top"><div><span class="status-badge static">{{ s.status }}</span><h2>{{ s.animal.name }} <small>{{ s.animal.animal_id }}</small></h2><p>{% if volunteer_view %}Submitted{% else %}Submitted by {{ s.user.full_name }}{% endif %} · {{ s.created_at }}</p></div><a class="text-link" href="{% url 'animal_profile' s.animal.pk %}">View animal →</a></div>
+      <div class="submission-body">
+        {% if s.observations %}<p>{{ s.observations }}</p>{% endif %}
+        {% if s.temperament %}<p><strong>Temperament:</strong> {{ s.temperament }}</p>{% endif %}
+        {% if s.good_with %}<p><strong>Good with:</strong> {{ s.good_with }}</p>{% endif %}
+        {% if s.notes %}<p><strong>Notes:</strong> {{ s.notes }}</p>{% endif %}
+        {% if s.status == 'Rejected' and s.rejection_reason %}<p class="rejection-reason"><strong>Reason:</strong> {{ s.rejection_reason }}</p>{% endif %}
+        {% if s.reviewed_by %}<p class="review-meta">Reviewed by {{ s.reviewed_by.full_name }} · {{ s.reviewed_at }}</p>{% endif %}
+      </div>
+      {% if volunteer_view %}
+        {% if s.photos.exists %}<h3>Submitted photos</h3><div class="submission-photo-grid">{% for photo in s.photos.all %}<figure class="submission-photo"><img src="{{ photo.image.url }}" alt="Submitted photo {{ forloop.counter }} for {{ s.animal.name }}"><figcaption>Candidate {{ forloop.counter }}</figcaption></figure>{% endfor %}</div>{% endif %}
+      {% elif s.status == 'Pending' %}
+        <form class="approval-form" method="post" action="{% url 'review_submission' s.pk 'approve' %}">
+          {% csrf_token %}
+          <div class="capacity-note" role="status"><strong>Approval-time capacity:</strong> {{ s.animal.photos.count }} official + {{ s.photos.count }} submitted. Select the submitted photos to add and any official photos to remove. The gallery is rechecked when you approve and can never exceed five.</div>
+          {% if s.photos.exists %}
+            <fieldset><legend>Submitted candidate photos</legend><div class="submission-photo-grid">
+              {% for photo in s.photos.all %}<article class="submission-photo review-photo"><img src="{{ photo.image.url }}" alt="Submitted photo {{ forloop.counter }} for {{ s.animal.name }}"><label><input type="checkbox" name="approve_photo" value="{{ photo.pk }}" checked> Add to official gallery</label>{% if photo.original_image %}<a class="original-download" href="{% url 'original_photo' 'submission' photo.pk %}">⇩ Download original</a>{% endif %}</article>{% endfor %}
+            </div></fieldset>
+          {% else %}<p class="muted-note">This submission contains no candidate photos.</p>{% endif %}
+          {% if s.animal.photos.exists %}
+            <fieldset><legend>Current official gallery</legend><p class="fieldset-help">Only select an official photo if it should be removed when this submission is approved.</p><div class="submission-photo-grid">
+              {% for photo in s.animal.photos.all %}<article class="submission-photo review-photo official-photo"><img src="{{ photo.url }}" alt="Official photo {{ forloop.counter }} for {{ s.animal.name }}"><label><input type="checkbox" name="replace_photo" value="{{ photo.pk }}"> Remove official photo</label></article>{% endfor %}
+            </div></fieldset>
+          {% endif %}
+          <button class="button primary" type="submit">Approve selected update</button>
+        </form>
+        <form class="rejection-form" method="post" action="{% url 'review_submission' s.pk 'reject' %}">{% csrf_token %}<label for="reason-{{ s.pk }}">Rejection reason (optional)</label><input id="reason-{{ s.pk }}" name="reason" placeholder="Explain what should be changed"><button class="button danger" type="submit">Reject</button></form>
+      {% else %}
+        {% if s.photos.exists %}<h3>Submitted photos</h3><div class="submission-photo-grid">{% for photo in s.photos.all %}<figure class="submission-photo"><img src="{{ photo.image.url }}" alt="Submitted photo {{ forloop.counter }} for {{ s.animal.name }}"><figcaption>Candidate {{ forloop.counter }}</figcaption></figure>{% endfor %}</div>{% endif %}
+      {% endif %}
+    </article>
+  {% empty %}
+    <div class="empty"><h2>No {{ status|lower }} submissions</h2>{% if volunteer_view %}<p>Your submissions will appear here after you send an animal update.</p>{% endif %}</div>
+  {% endfor %}
+</div>
+{% endblock %}

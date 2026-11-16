@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">Administration</span><h1>Organization settings</h1><p>Customize the identity your team and visitors see.</p></div></div>
+<form class="branding-layout" method="post" enctype="multipart/form-data" data-branding-form data-preview-url-template="{% url 'branding_preview' 'ASSET_KIND' %}">
+  {% csrf_token %}
+  <div class="flash wide" data-branding-session hidden role="status"><strong data-branding-countdown></strong> <span>Image changes are temporary until saved.</span> <button type="button" class="text-button" data-branding-discard>Discard image changes</button></div>
+  <section class="form-section branding-editor">
+    <h2>Branding</h2>
+    {% if form.non_field_errors %}<ul class="errorlist" role="alert">{{ form.non_field_errors }}</ul>{% endif %}
+    <p><label for="{{ form.name.id_for_label }}">Organization name</label>{{ form.name }}{{ form.name.errors }}</p>
+
+    <section class="branding-asset" data-branding-cropper data-kind="logo" data-ratio="1">
+      <h3>Logo</h3><p>JPG or PNG, up to {{ branding_max_size }} MiB. Select a square crop; transparent areas are preserved.</p>
+      {{ form.logo_upload }}{{ form.logo_upload.errors }}{{ form.logo_crop }}{{ form.logo_crop.errors }}
+      <div class="crop-stage-shell"><div class="crop-selection-stage compact-stage" data-crop-stage>{% if org.logo or org.logo_original %}<img src="{% url 'branding_preview' 'logo' %}" alt="Logo crop preview" data-crop-image>{% else %}<img alt="Logo crop preview" data-crop-image hidden>{% endif %}<span data-crop-placeholder {% if org.logo or org.logo_original %}hidden{% endif %}>Choose a logo to preview and crop</span><div class="crop-selection" data-crop-selection tabindex="0" role="application" aria-label="Move the square logo crop. Use arrow keys to move it."><i class="crop-grid vertical one"></i><i class="crop-grid vertical two"></i><i class="crop-grid horizontal one"></i><i class="crop-grid horizontal two"></i><button type="button" class="crop-handle nw" data-crop-handle="nw" aria-label="Resize crop from top left"></button><button type="button" class="crop-handle ne" data-crop-handle="ne" aria-label="Resize crop from top right"></button><button type="button" class="crop-handle sw" data-crop-handle="sw" aria-label="Resize crop from bottom left"></button><button type="button" class="crop-handle se" data-crop-handle="se" aria-label="Resize crop from bottom right"></button></div></div></div>
+      <p class="crop-status" data-crop-status aria-live="polite">Move or resize the square selection. The image remains fixed.</p>
+      {% if org.logo or org.logo_original %}<label class="remove-branding">{{ form.logo_remove }} Remove the current logo</label>{% endif %}
+    </section>
+
+    <section class="branding-asset" data-branding-cropper data-kind="banner" data-ratio="{{ branding_banner_ratio|default:'3' }}">
+      <h3>Homepage banner</h3><p>JPG, PNG, HEIC, or HEIF, up to {{ branding_max_size }} MiB. Select the visible crop for the configured banner ratio.</p>
+      {{ form.banner_upload }}{{ form.banner_upload.errors }}{{ form.banner_crop }}{{ form.banner_crop.errors }}
+      <div class="crop-stage-shell"><div class="crop-selection-stage banner-stage" data-crop-stage>{% if org.banner or org.banner_original %}<img src="{% url 'branding_preview' 'banner' %}" alt="Banner crop preview" data-crop-image>{% else %}<img alt="Banner crop preview" data-crop-image hidden>{% endif %}<span data-crop-placeholder {% if org.banner or org.banner_original %}hidden{% endif %}>Choose a banner to preview and crop</span><div class="crop-selection" data-crop-selection tabindex="0" role="application" aria-label="Move the banner crop. Use arrow keys to move it."><i class="crop-grid vertical one"></i><i class="crop-grid vertical two"></i><i class="crop-grid horizontal one"></i><i class="crop-grid horizontal two"></i><button type="button" class="crop-handle nw" data-crop-handle="nw" aria-label="Resize crop from top left"></button><button type="button" class="crop-handle ne" data-crop-handle="ne" aria-label="Resize crop from top right"></button><button type="button" class="crop-handle sw" data-crop-handle="sw" aria-label="Resize crop from bottom left"></button><button type="button" class="crop-handle se" data-crop-handle="se" aria-label="Resize crop from bottom right"></button></div></div></div>
+      <p class="crop-status" data-crop-status aria-live="polite">Move or resize the banner selection. Its configured ratio stays locked.</p>
+      {% if org.banner or org.banner_original %}<label class="remove-branding">{{ form.banner_remove }} Remove the current banner</label>{% endif %}
+    </section>
+
+    <section class="branding-asset" data-branding-cropper data-kind="favicon" data-ratio="1">
+      <h3>Browser icon</h3><p>JPG or PNG, up to {{ branding_max_size }} MiB. Select a square crop. When omitted, the square logo or default heart is used.</p>
+      {{ form.favicon_upload }}{{ form.favicon_upload.errors }}{{ form.favicon_crop }}{{ form.favicon_crop.errors }}
+      <div class="crop-stage-shell"><div class="crop-selection-stage compact-stage" data-crop-stage>{% if org.favicon or org.favicon_original %}<img src="{% url 'branding_preview' 'favicon' %}" alt="Favicon crop preview" data-crop-image>{% else %}<img alt="Favicon crop preview" data-crop-image hidden>{% endif %}<span data-crop-placeholder {% if org.favicon or org.favicon_original %}hidden{% endif %}>Choose a favicon to preview and crop</span><div class="crop-selection" data-crop-selection tabindex="0" role="application" aria-label="Move the square favicon crop. Use arrow keys to move it."><i class="crop-grid vertical one"></i><i class="crop-grid vertical two"></i><i class="crop-grid horizontal one"></i><i class="crop-grid horizontal two"></i><button type="button" class="crop-handle nw" data-crop-handle="nw" aria-label="Resize crop from top left"></button><button type="button" class="crop-handle ne" data-crop-handle="ne" aria-label="Resize crop from top right"></button><button type="button" class="crop-handle sw" data-crop-handle="sw" aria-label="Resize crop from bottom left"></button><button type="button" class="crop-handle se" data-crop-handle="se" aria-label="Resize crop from bottom right"></button></div></div></div>
+      <p class="crop-status" data-crop-status aria-live="polite">Move or resize the square selection. The image remains fixed.</p>
+      {% if org.favicon or org.favicon_original %}<label class="remove-branding">{{ form.favicon_remove }} Remove the current favicon</label>{% endif %}
+    </section>
+
+    <div class="color-setting"><label for="{{ form.primary_color.id_for_label }}">Primary color</label><div class="color-control"><input type="color" value="{{ form.primary_color.value|default:'#245C4A' }}" data-color-picker data-color-target="{{ form.primary_color.id_for_label }}" aria-label="Choose primary color">{{ form.primary_color }}</div>{{ form.primary_color.errors }}</div>
+    <div class="color-setting"><label for="{{ form.secondary_color.id_for_label }}">Secondary color</label><div class="color-control"><input type="color" value="{{ form.secondary_color.value|default:'#D47A45' }}" data-color-picker data-color-target="{{ form.secondary_color.id_for_label }}" aria-label="Choose secondary color">{{ form.secondary_color }}</div>{{ form.secondary_color.errors }}</div>
+    <button class="button primary" type="submit">Save settings</button>
+  </section>
+  <aside class="preview-card">
+    <span class="eyebrow">Live preview</span>
+    <div class="favicon-preview">
+      <img src="{% if favicon_180_url %}{{ favicon_180_url }}{% else %}{% static 'favicon.svg' %}{% endif %}" alt="Current browser icon preview" data-live-favicon>
+      <div><strong>Browser icon</strong><small>Uses the favicon upload, then the logo, then the default heart.</small></div>
+    </div>
+    <div class="preview-window"><header>{% if org.logo %}<img src="{{ org.logo.url }}" alt="" data-live-logo>{% else %}<span data-live-logo-fallback>♥</span>{% endif %}<strong data-live-name>{{ form.name.value|default:org.name }}</strong></header><div class="mini-banner" {% if org.banner %}style="background-image:linear-gradient(#173d32b8,#173d32b8),url('{{ org.banner.url }}')"{% endif %} data-live-banner><h3 data-live-name>{{ form.name.value|default:org.name }}</h3><button>Explore animals</button></div></div>
+  </aside>
+</form>
+{% endblock %}

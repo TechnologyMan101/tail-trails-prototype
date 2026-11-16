@@ -1,0 +1,33 @@
+<section class="detail-card system-card">
+  <h2>Release and runtime</h2>
+  <dl><dt>Build</dt><dd><code>{{ system.version }}</code></dd><dt>Python</dt><dd>{{ system.server.python }}</dd><dt>Django</dt><dd>{{ system.server.django }}</dd><dt>Time zone</dt><dd>{{ system.time_zone }}</dd></dl>
+</section>
+
+<section class="detail-card system-card">
+  <h2>Database</h2>
+  <p class="health-state {% if system.database.healthy %}healthy{% else %}unhealthy{% endif %}">{{ system.database.status }}</p>
+  <dl><dt>Engine</dt><dd>{{ system.database.engine }}</dd><dt>Response time</dt><dd>{% if system.database.latency_ms != None %}{{ system.database.latency_ms }} ms{% else %}Unavailable{% endif %}</dd><dt>Latest migration</dt><dd><code>{{ system.database.latest_migration }}</code></dd><dt>Applied</dt><dd>{{ system.database.latest_migration_time|default:'Unavailable' }}</dd></dl>
+  {% if system.database.error %}<p class="system-error">{{ system.database.error }}</p>{% endif %}
+</section>
+
+<section class="detail-card system-card">
+  <h2>Upload storage</h2>
+  <dl><dt>Configured folder</dt><dd><code>{{ system.storage.configured_path }}</code></dd><dt>Measured filesystem</dt><dd><code>{{ system.storage.measured_path }}</code></dd><dt>Total</dt><dd>{{ system.storage.total }}</dd><dt>Used</dt><dd>{{ system.storage.used }}</dd><dt>Free</dt><dd><strong>{{ system.storage.free }}</strong></dd></dl>
+  <label class="usage-label">Disk used <span>{{ system.storage.percent }}%</span><progress max="100" value="{{ system.storage.percent }}">{{ system.storage.percent }}%</progress></label>
+</section>
+
+<section class="detail-card system-card">
+  <h2>Image configuration</h2>
+  <dl><dt>Web canvas</dt><dd>{{ system.images.dimensions }}</dd><dt>JPEG quality</dt><dd>{{ system.images.quality }}</dd><dt>Per-file limit</dt><dd>{{ system.images.per_file_limit }}</dd><dt>Request limit</dt><dd>{{ system.images.request_limit }}</dd><dt>Gallery limit</dt><dd>{{ system.images.gallery_limit }}</dd><dt>Crop session</dt><dd>{{ system.images.crop_session }}</dd><dt>Cleanup interval</dt><dd>{{ system.images.cleanup_interval }}</dd></dl>
+</section>
+
+<section class="detail-card system-card wide-system-card">
+  <h2>Server usage</h2>
+  <div class="system-columns">
+    <dl><dt>Operating system</dt><dd>{{ system.server.operating_system }}</dd><dt>CPU</dt><dd>{{ system.server.cpu_name }}</dd><dt>Logical CPUs</dt><dd>{{ system.server.cpu_count }}</dd><dt>Load averages (1 / 5 / 15 min)</dt><dd>{{ system.server.load_average }}</dd><dt>Kernel uptime</dt><dd>{{ system.server.uptime }}</dd></dl>
+    <dl><dt>Process ID</dt><dd>{{ system.server.process_id }}</dd><dt>Process resident memory</dt><dd>{{ system.server.process_memory }}</dd><dt>Memory source</dt><dd>{{ system.server.memory.source }}</dd><dt>Memory used</dt><dd>{{ system.server.memory.used }} of {{ system.server.memory.total }}</dd><dt>Memory available</dt><dd>{{ system.server.memory.available }}</dd></dl>
+  </div>
+  <label class="usage-label">Memory used <span>{{ system.server.memory.percent }}%</span><progress max="100" value="{{ system.server.memory.percent }}">{{ system.server.memory.percent }}%</progress></label>
+  <div class="swap-usage"><h3>Swap space</h3><dl><dt>Swap source</dt><dd>{{ system.server.swap.source }}</dd><dt>Total</dt><dd>{{ system.server.swap.total }}</dd><dt>Used</dt><dd>{{ system.server.swap.used }}</dd><dt>Available</dt><dd>{{ system.server.swap.available }}</dd></dl>{% if system.server.swap.enabled %}<label class="usage-label">Swap used <span>{{ system.server.swap.percent }}%</span><progress max="100" value="{{ system.server.swap.percent }}">{{ system.server.swap.percent }}%</progress></label>{% else %}<p class="system-note">Swap is disabled or unavailable.</p>{% endif %}</div>
+  <p class="system-note">CPU, memory, load, uptime, and filesystem values are container-visible snapshots. They may represent container limits or host-kernel values depending on the deployment environment.</p>
+</section>

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}System information · {{ org.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow">Administration</span><h1>System information</h1><p>Request-time operational details visible from the application container.</p></div>
+  <form class="system-refresh-control" method="get" action="{% url 'system_information' %}" data-system-refresh-form data-system-stream-url="{% url 'system_information_stream' %}">
+    <label for="system-refresh-interval">Refresh frequency</label>
+    <select id="system-refresh-interval" name="refresh" data-system-refresh>
+      <option value="1" {% if refresh_interval == 1 %}selected{% endif %}>Every 1 second</option>
+      <option value="2" {% if refresh_interval == 2 %}selected{% endif %}>Every 2 seconds</option>
+      <option value="5" {% if refresh_interval == 5 %}selected{% endif %}>Every 5 seconds</option>
+    </select>
+    <span class="system-refresh-status" data-system-refresh-status>Connecting for live updates…</span>
+    <noscript><button class="button ghost compact" type="submit">Apply and refresh</button></noscript>
+  </form>
+</div>
+
+<div class="system-grid" data-system-snapshot>
+  {% include '_system_snapshot.html' %}
+</div>
+{% endblock %}

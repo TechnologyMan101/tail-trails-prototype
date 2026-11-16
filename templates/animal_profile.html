@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}{{ animal.name }} · {{ org.name }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'animals' %}">← Back to search results</a>
+
+<section class="profile-hero">
+  <div class="gallery {% if animal.photos.count < 2 %}single-photo-gallery{% endif %}" data-gallery>
+    {% with first=animal.primary_photo %}
+      <button class="gallery-main" type="button" data-gallery-open {% if not first %}disabled{% endif %} aria-label="Open {{ animal.name }} photo gallery">
+        {% if first %}<img data-gallery-main src="{{ first.url }}" alt="{{ animal.name }} photo 1">{% else %}<span>🐾</span>{% endif %}
+      </button>
+    {% endwith %}
+
+    {% if animal.photos.count > 1 %}
+      <button class="gallery-arrow previous" type="button" data-gallery-inline-prev aria-label="Previous photo">‹</button>
+      <button class="gallery-arrow next" type="button" data-gallery-inline-next aria-label="Next photo">›</button>
+      <div class="gallery-thumbs" role="list" aria-label="{{ animal.name }} photo gallery">
+        {% for photo in animal.photos.all %}
+          <button type="button" class="gallery-thumb {% if forloop.first %}active{% endif %}" data-gallery-src="{{ photo.url }}" data-gallery-alt="{{ animal.name }} photo {{ forloop.counter }}" aria-label="View photo {{ forloop.counter }} of {{ animal.photos.count }}">
+            <img src="{{ photo.url }}" alt="">
+          </button>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <span class="gallery-count"><span data-gallery-position>{% if animal.photos.count %}1{% else %}0{% endif %}</span> / {{ animal.photos.count }} photo{{ animal.photos.count|pluralize }}</span>
+  </div>
+
+  <div class="profile-summary">
+    <span class="status-badge static">{{ animal.status }}</span>
+    <h1>{{ animal.name }}</h1>
+    <p class="profile-subtitle">{{ animal.breed }} · {{ animal.species }}</p>
+    <div class="quick-facts">
+      <div><span>Age</span><strong>{{ animal.age|floatformat:"-1" }} {{ animal.age_unit }}</strong></div>
+      <div><span>Sex</span><strong>{{ animal.sex }}</strong></div>
+      <div><span>Size</span><strong>{{ animal.size_class }}</strong></div>
+      <div><span>ID</span><strong>{{ animal.animal_id }}</strong></div>
+    </div>
+    <p class="about">{{ animal.public_description|default:'A public description has not been added yet.' }}</p>
+    {% if user.role == 'Employee' or user.role == 'Administrator' %}<a class="button primary" href="{% url 'animal_edit' animal.pk %}">Edit animal</a>{% elif user.role == 'Volunteer' %}<a class="button primary" href="{% url 'submit_update' animal.pk %}">Submit an update</a>{% endif %}
+  </div>
+</section>
+
+<div class="detail-grid">
+  <section class="detail-card"><h2>Basic information</h2><dl><dt>Species</dt><dd>{{ animal.species }}</dd><dt>Breed</dt><dd>{{ animal.breed }}</dd><dt>Color</dt><dd>{{ animal.color }}</dd><dt>Weight</dt><dd>{{ animal.weight|default:'Not provided' }}</dd><dt>Spay / neuter</dt><dd>{{ animal.spay_status }}</dd><dt>Microchipped</dt><dd>{% if animal.microchip %}Yes{% else %}No / unknown{% endif %}</dd></dl></section>
+  <section class="detail-card"><h2>Behavior & temperament</h2><dl><dt>Temperament</dt><dd>{{ animal.temperament|default:'Not provided' }}</dd><dt>Good with</dt><dd>{{ animal.good_with|default:'Not provided' }}</dd><dt>Energy</dt><dd>{{ animal.energy_level }}</dd><dt>House trained</dt><dd>{{ animal.house_trained }}</dd><dt>Leash skills</dt><dd>{{ animal.leash_skills }}</dd></dl>{% if animal.behavior_notes %}<p>{{ animal.behavior_notes|linebreaksbr }}</p>{% endif %}</section>
+  <section class="detail-card"><h2>Medical information</h2><dl><dt>Vaccinations</dt><dd>{{ animal.vaccination_status }}</dd><dt>Heartworm</dt><dd>{{ animal.heartworm_status }}</dd><dt>Conditions</dt><dd>{{ animal.medical_conditions|default:'None noted' }}</dd><dt>Medications</dt><dd>{{ animal.medications|default:'None noted' }}</dd></dl></section>
+  {% if user.is_authenticated %}<section class="detail-card"><h2>Intake & location</h2><dl><dt>Intake date</dt><dd>{{ animal.intake_date }}</dd><dt>Intake type</dt><dd>{{ animal.intake_type }}</dd><dt>Currently held at</dt><dd>{{ animal.held_at }}</dd></dl></section>{% endif %}
+  {% if user.role == 'Employee' or user.role == 'Administrator' %}
+    <section class="detail-card restricted"><h2>Restricted staff record</h2><dl><dt>Microchip number</dt><dd>{{ animal.microchip|default:'Not provided' }}</dd><dt>Foster caregiver</dt><dd>{{ animal.foster_caregiver|default:'Not applicable' }}</dd><dt>Previous owner</dt><dd>{{ animal.previous_owner|default:'Not provided' }}</dd><dt>General notes</dt><dd>{{ animal.general_notes|default:'Not provided' }}</dd></dl></section>
+    <section class="detail-card"><h2>Change history</h2><ul class="timeline">{% for h in animal.history.all %}<li><strong>{{ h.summary }}</strong><span>{{ h.user.full_name }} · {{ h.created_at }}</span></li>{% empty %}<li>No recorded changes.</li>{% endfor %}</ul></section>
+  {% endif %}
+</div>
+
+<dialog class="gallery-lightbox" data-gallery-dialog>
+  <button type="button" data-gallery-close aria-label="Close">×</button>
+  <button type="button" data-gallery-prev aria-label="Previous photo">‹</button>
+  <img data-gallery-lightbox alt="">
+  <button type="button" data-gallery-next aria-label="Next photo">›</button>
+</dialog>
+{% endblock %}

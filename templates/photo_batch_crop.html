@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head"><div><span class="eyebrow">Upload complete</span><h1>Crop {{ batch.photos.count }} photo{{ batch.photos.count|pluralize }}</h1><p>The originals are private and retained only while this crop session is active.</p></div><div class="crop-deadline" data-batch-countdown data-server-now="{{ server_now }}" data-expires-at="{{ batch.expires_at.isoformat }}"><span>Time remaining</span><strong data-countdown-time>--:--</strong><small data-countdown-status aria-live="polite"></small></div></div>
+<form method="post" class="photo-crop-form" data-photo-crop-form data-landscape-ratio="{{ landscape_ratio }}">
+  {% csrf_token %}
+  <div class="batch-crop-list">
+    {% for photo in batch.photos.all %}
+    <article class="batch-crop-card" data-photo-cropper data-photo-id="{{ photo.pk }}">
+      <header><div><span class="eyebrow">Photo {{ forloop.counter }} of {{ batch.photos.count }}</span><h2>{{ photo.original_filename }}</h2></div><label>Orientation<select name="orientation_{{ photo.pk }}" data-photo-orientation><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label></header>
+      <div class="crop-stage-shell photo-stage-shell"><div class="crop-selection-stage photo-crop-stage" data-photo-crop-stage><img src="{% url 'photo_batch_preview' batch.pk photo.pk %}" alt="Crop preview for {{ photo.original_filename }}" data-photo-crop-image><div class="crop-selection" data-photo-crop-selection tabindex="0" role="application" aria-label="Move the crop for {{ photo.original_filename }}. Use arrow keys to move it."><i class="crop-grid vertical one"></i><i class="crop-grid vertical two"></i><i class="crop-grid horizontal one"></i><i class="crop-grid horizontal two"></i><button type="button" class="crop-handle nw" data-crop-handle="nw" aria-label="Resize crop from top left"></button><button type="button" class="crop-handle ne" data-crop-handle="ne" aria-label="Resize crop from top right"></button><button type="button" class="crop-handle sw" data-crop-handle="sw" aria-label="Resize crop from bottom left"></button><button type="button" class="crop-handle se" data-crop-handle="se" aria-label="Resize crop from bottom right"></button></div></div></div>
+      <input type="hidden" name="crop_{{ photo.pk }}" value="{}" data-photo-crop-value>
+      <p class="system-note">Move or resize the 3×3 selection. The image stays fixed and the saved JPG uses the configured orientation and aspect ratio without letterboxing.</p>
+    </article>
+    {% endfor %}
+  </div>
+  <div class="form-footer"><button class="button primary" type="submit" data-finalize-crops>Save all crops</button></div>
+</form>
+<form method="post" action="{% url 'photo_batch_cancel' batch.pk %}" class="cancel-batch-form">{% csrf_token %}<button class="button danger" type="submit">Cancel and discard uploads</button></form>
+{% endblock %}

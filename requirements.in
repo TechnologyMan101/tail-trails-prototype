@@ -1,0 +1,8 @@
+# Direct dependency policy. Release preparation resolves the newest stable
+# versions within these compatible series into requirements.lock.
+Django~=5.2.0
+uvicorn~=0.54.0
+psycopg[binary]~=3.2.0
+Pillow>=12,<13
+pillow-heif>=1.8,<2
+whitenoise>=6,<7

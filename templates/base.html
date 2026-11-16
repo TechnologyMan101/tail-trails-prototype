@@ -1,0 +1,64 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="tail-trails-build" content="{{ app_version }}">
+  <title>{% block title %}{{ org.name|default:'Tail Trails' }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,650&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% if favicon_32_url %}{{ favicon_32_url }}{% else %}{% static 'favicon.svg' %}{% endif %}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% if favicon_180_url %}{{ favicon_180_url }}{% else %}{% static 'favicon.svg' %}{% endif %}">
+  <link rel="stylesheet" href="{% static 'style.css' %}?v={{ app_version }}">
+  <style>
+    :root{--primary:{{ org.primary_color|default:'#245C4A' }};--secondary:{{ org.secondary_color|default:'#D47A45' }}}
+    body .page-container{width:100%!important;max-width:1276px!important;margin-inline:auto!important;padding:36px clamp(18px,4vw,48px) 64px!important}
+    @media(max-width:800px){body .page-container{max-width:none!important;padding:26px 20px 45px!important}}
+    @media(max-width:520px){body .page-container{padding-inline:16px!important}}
+  </style>
+</head>
+<body data-build="{{ app_version }}">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{% url 'home' %}">
+        {% if org.logo %}<img src="{{ org.logo.url }}" alt="">{% else %}<span class="brand-mark">♥</span>{% endif %}
+        <span>{{ org.name|default:'Tail Trails' }}</span>
+      </a>
+      <div class="top-actions">
+        {% if user.is_authenticated %}
+          <span class="role-pill">{{ user.role }}</span>
+          <details class="user-menu"><summary>{{ user.full_name }}</summary><div><a href="{% url 'account' %}">Account settings</a><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button">Log out</button></form></div></details>
+        {% else %}
+          <a class="button ghost compact" href="{% url 'login' %}">Staff / volunteer login</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+  <div class="app-shell {% if not user.is_authenticated %}public-shell{% endif %}">
+    {% if user.is_authenticated %}
+      <aside class="sidebar">
+        <a class="nav-link {% if request.resolver_match.url_name == 'animals' or request.resolver_match.url_name == 'animal_profile' %}active{% endif %}" href="{% url 'animals' %}">⌕ Animal search</a>
+        {% if user.role == 'Volunteer' %}<a class="nav-link {% if request.resolver_match.url_name == 'submissions' %}active{% endif %}" href="{% url 'submissions' %}">✓ My submissions</a>{% endif %}
+        {% if user.role == 'Employee' or user.role == 'Administrator' %}
+          <a class="nav-link {% if request.resolver_match.url_name == 'animal_new' %}active{% endif %}" href="{% url 'animal_new' %}">＋ Add animal</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'submissions' %}active{% endif %}" href="{% url 'submissions' %}">✓ Submissions</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'volunteer_hours' %}active{% endif %}" href="{% url 'volunteer_hours' %}">◷ Volunteer hours</a>
+        {% endif %}
+        {% if user.role == 'Administrator' %}
+          <div class="nav-label">Administration</div>
+          <a class="nav-link" href="{% url 'users' %}">♙ Manage users</a>
+          <a class="nav-link" href="{% url 'organization' %}">⚙ Organization</a>
+          <a class="nav-link {% if request.resolver_match.url_name == 'system_information' %}active{% endif %}" href="{% url 'system_information' %}">ⓘ System information</a>
+        {% endif %}
+      </aside>
+    {% endif %}
+    <main class="main-content"><div class="page-container">
+      {% for message in messages %}<div class="flash {{ message.tags }}">{{ message }}</div>{% endfor %}
+      {% block content %}{% endblock %}
+    </div></main>
+  </div>
+  <script src="{% static 'app.js' %}?v={{ app_version }}"></script>
+</body>
+</html>

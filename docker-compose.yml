@@ -1,0 +1,86 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_UID: ${TAILTRAILS_UID:-1000}
+        APP_GID: ${TAILTRAILS_GID:-1000}
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-this-before-production}
+      UPLOAD_FOLDER: /app/uploads
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-tailtrails}
+      POSTGRES_USER: ${POSTGRES_USER:-tailtrails}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-database-password}
+      PHOTO_WEB_WIDTH: ${PHOTO_WEB_WIDTH:-1600}
+      PHOTO_WEB_HEIGHT: ${PHOTO_WEB_HEIGHT:-1200}
+      PHOTO_WEB_QUALITY: ${PHOTO_WEB_QUALITY:-82}
+      MAX_PHOTO_SIZE_MB: ${MAX_PHOTO_SIZE_MB:-25}
+      MAX_REQUEST_SIZE_MB: ${MAX_REQUEST_SIZE_MB:-160}
+      BRANDING_LOGO_SIZE: ${BRANDING_LOGO_SIZE:-512}
+      BRANDING_BANNER_WIDTH: ${BRANDING_BANNER_WIDTH:-1920}
+      BRANDING_BANNER_HEIGHT: ${BRANDING_BANNER_HEIGHT:-640}
+      BRANDING_WEB_QUALITY: ${BRANDING_WEB_QUALITY:-85}
+      BRANDING_MAX_SIZE_MB: ${BRANDING_MAX_SIZE_MB:-25}
+      PHOTO_BATCH_TTL_MINUTES: ${PHOTO_BATCH_TTL_MINUTES:-30}
+      PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES: ${PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES:-60}
+      # Set COOKIE_SECURE=true when TLS terminates at your reverse proxy.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${TAILTRAILS_PORT:-8000}:8000"
+      - "[::1]:${TAILTRAILS_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  cleanup:
+    build:
+      context: .
+      args:
+        APP_UID: ${TAILTRAILS_UID:-1000}
+        APP_GID: ${TAILTRAILS_GID:-1000}
+    restart: unless-stopped
+    command: ["python", "manage.py", "run_photo_batch_cleanup"]
+    environment:
+      UPLOAD_FOLDER: /app/uploads
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-tailtrails}
+      POSTGRES_USER: ${POSTGRES_USER:-tailtrails}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-database-password}
+      PHOTO_BATCH_TTL_MINUTES: ${PHOTO_BATCH_TTL_MINUTES:-30}
+      PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES: ${PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES:-60}
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      app:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      # Keep the actual cluster below the bind-mount root so .gitkeep and
+      # mount-point metadata do not make initdb reject the directory.
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_DB: ${POSTGRES_DB:-tailtrails}
+      POSTGRES_USER: ${POSTGRES_USER:-tailtrails}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-database-password}
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tailtrails} -d ${POSTGRES_DB:-tailtrails}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+

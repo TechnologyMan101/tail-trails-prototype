@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<a class="back-link" href="{% url 'animal_profile' animal.pk %}">← Back to {{ animal.name }}</a>
+<div class="page-head">
+  <div><span class="eyebrow">Volunteer contribution</span><h1>Share an update about {{ animal.name }}</h1><p>Your contribution remains pending until shelter staff approve it.</p></div>
+</div>
+{% if resumable_batch %}<div class="flash"><strong>Unfinished photo crop:</strong> {{ resumable_batch.photos.count }} uploaded candidate photo{{ resumable_batch.photos.count|pluralize }} still need cropping. <a class="text-link" href="{% url 'photo_batch_crop' resumable_batch.pk %}">Resume cropping →</a></div>{% endif %}
+<div class="two-col">
+  <aside class="summary-card">
+    {% with photo=animal.primary_photo %}{% if photo %}<img src="{{ photo.url }}" alt="{{ animal.name }}">{% endif %}{% endwith %}
+    <h2>{{ animal.name }}</h2><p>{{ animal.breed }} · {{ animal.age|floatformat:"-1" }} {{ animal.age_unit }}</p>
+  </aside>
+  <form class="form-section volunteer-submission-form" method="post" enctype="multipart/form-data" data-photo-editor data-max-files="5">
+    {% csrf_token %}
+    <h2>Submit an update</h2>
+    {% if form.non_field_errors %}<div class="flash error">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}{% if field.name != 'photos' %}
+      <div class="field-row compact-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<small class="field-error">{{ error }}</small>{% endfor %}</div>
+    {% endif %}{% endfor %}
+    <section class="candidate-upload">
+      <h3>Candidate photos</h3>
+      <p>{{ animal.photos.count }} of 5 official gallery spaces are currently used. You may submit up to five candidate photos; they do not reserve gallery space or become public automatically. Staff will choose which photos to approve and replace, if necessary.</p>
+      <div class="photo-upload-control" data-photo-upload-control>
+        <label for="{{ form.photos.id_for_label }}">Photos</label>{{ form.photos }}<small>{{ form.photos.help_text }}</small>
+        <p class="file-selection-message" data-file-selection-message aria-live="polite">No new photos selected.</p>
+        <div class="upload-progress" data-upload-status hidden>
+          <label for="volunteer-upload-progress" data-upload-label>Overall upload progress</label>
+          <progress id="volunteer-upload-progress" data-upload-progress max="100" value="0">0%</progress>
+          <span data-upload-message role="status" aria-live="polite"></span>
+        </div>
+      </div>
+      {% if form.photos.errors %}<ul class="field-error-list" role="alert">{% for error in form.photos.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </section>
+    <div class="form-footer"><a class="button ghost" href="{% url 'animal_profile' animal.pk %}">Cancel</a><button class="button primary" type="submit">Submit for review</button></div>
+  </form>
+</div>
+{% endblock %}
