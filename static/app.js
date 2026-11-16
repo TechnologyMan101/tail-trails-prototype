@@ -95,6 +95,22 @@ if (gallery) {
 const initializePhotoEditor = (photoEditor) => {
   if (!photoEditor || photoEditor.dataset.uploadInitialized === 'true') return;
   photoEditor.dataset.uploadInitialized = 'true';
+  const statusSelect = $('[name="status"]', photoEditor);
+  const deceasedSection = $('[data-deceased-confirmation]', photoEditor);
+  if (statusSelect && deceasedSection) {
+    statusSelect.closest('.field-row')?.after(deceasedSection);
+    const syncDeceasedFields = () => {
+      const selected = statusSelect.value === 'Deceased';
+      deceasedSection.hidden = !selected;
+      $$('input,textarea', deceasedSection).forEach((control) => {
+        control.disabled = !selected;
+        control.required = selected;
+      });
+    };
+    statusSelect.addEventListener('change', syncDeceasedFields);
+    syncDeceasedFields();
+  }
+  $('[data-animal-errors]', photoEditor)?.focus();
   const newCover = $('[name="make_new_primary"]', photoEditor);
   const coverChoices = $$('[name="primary_photo"]', photoEditor);
   const removeChoices = $$('[name="remove_photo"]', photoEditor);

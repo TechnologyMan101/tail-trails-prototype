@@ -66,7 +66,7 @@ class Organization(models.Model):
 
 class Animal(models.Model):
     SPECIES = [(x, x) for x in ("Dog", "Cat", "Rabbit", "Other")]
-    STATUSES = [(x, x) for x in ("Available", "Pending Adoption", "Not Available", "Euthanized")]
+    STATUSES = [(x, x) for x in ("Available", "Pending Adoption", "Not Available", "Deceased")]
     SEXES = [(x, x) for x in ("Male", "Female", "Unknown")]
     LOCATIONS = [(x, x) for x in ("Kennel", "Foster Home")]
     SPAY = [(x, x) for x in ("Spayed", "Neutered", "Nursing", "Unknown")]
@@ -112,8 +112,9 @@ class Animal(models.Model):
     previous_owner = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=STATUSES)
     is_archived = models.BooleanField(default=False, help_text="Hide this record from normal search and public pages. Uncheck to restore it.")
-    euthanized_at = models.DateTimeField(null=True, blank=True, editable=False)
-    euthanized_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, editable=False, on_delete=models.PROTECT, related_name="confirmed_euthanasia_records")
+    deceased_at = models.DateTimeField(null=True, blank=True, editable=False)
+    deceased_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, editable=False, on_delete=models.PROTECT, related_name="confirmed_deceased_records")
+    deceased_reason = models.TextField(blank=True, editable=False)
     public_description = models.TextField(blank=True)
     general_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -123,10 +124,10 @@ class Animal(models.Model):
 
     def save(self, *args, **kwargs):
         if self.pk:
-            previous = Animal.objects.filter(pk=self.pk).values("status", "euthanized_at", "euthanized_by_id").first()
-            if previous and previous["status"] == "Euthanized":
-                if self.status != "Euthanized" or self.euthanized_at != previous["euthanized_at"] or self.euthanized_by_id != previous["euthanized_by_id"]:
-                    raise ValidationError("The confirmed euthanized status and confirmation details are permanent.")
+            previous = Animal.objects.filter(pk=self.pk).values("status", "deceased_at", "deceased_by_id", "deceased_reason").first()
+            if previous and previous["status"] == "Deceased":
+                if self.status != "Deceased" or self.deceased_at != previous["deceased_at"] or self.deceased_by_id != previous["deceased_by_id"] or self.deceased_reason != previous["deceased_reason"]:
+                    raise ValidationError("The confirmed deceased status and confirmation details are permanent.")
         super().save(*args, **kwargs)
 
     def clean(self):

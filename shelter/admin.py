@@ -25,16 +25,16 @@ class AnimalAdmin(admin.ModelAdmin):
     search_fields = ("animal_id", "name", "breed")
     list_filter = ("species", "status", "is_archived", "held_at")
     inlines = [PhotoInline]
-    readonly_fields = ("euthanized_at", "euthanized_by")
+    readonly_fields = ("deceased_at", "deceased_by", "deceased_reason")
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
         if "status" in form.base_fields:
-            if obj and obj.status == "Euthanized":
+            if obj and obj.status == "Deceased":
                 form.base_fields["status"].disabled = True
             else:
-                form.base_fields["status"].choices = [(value, label) for value, label in Animal.STATUSES if value != "Euthanized"]
-                form.base_fields["status"].help_text = "Use the animal edit page to confirm euthanasia with your password."
+                form.base_fields["status"].choices = [(value, label) for value, label in Animal.STATUSES if value != "Deceased"]
+                form.base_fields["status"].help_text = "Use the animal edit page to confirm deceased status with your password."
         return form
 
 @admin.register(SubmissionPhoto)

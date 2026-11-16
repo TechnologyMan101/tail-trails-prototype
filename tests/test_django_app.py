@@ -49,29 +49,43 @@ class TailTrailsTests(TestCase):
 
     def login(self, user): self.client.force_login(user)
 
-    def test_euthanasia_requires_confirmation_and_correct_password(self):
+    def test_new_animal_profile_saves(self):
         self.login(self.employee)
-        url = reverse("animal_euthanize", args=[self.available.pk])
+        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="New arrival"))
+        if response.status_code == 200:
+            self.fail(str(response.context["form"].errors))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Animal.objects.filter(name="New arrival").exists())
+
+    def deceased_data(self, **overrides):
+        data = self.animal_form_data(status="Deceased", deceased_reason="Natural causes", deceased_confirm="on", deceased_password="Trail123!")
+        data.update(overrides)
+        return data
+
+    def test_deceased_requires_reason_confirmation_and_correct_password(self):
+        self.login(self.employee)
+        url = reverse("animal_edit", args=[self.available.pk])
         self.assertEqual(self.client.get(url).status_code, 200)
-        for data in ({"confirm": "on", "password": "wrong"}, {"password": "Trail123!"}):
+        for data in (self.deceased_data(deceased_password="wrong"), self.deceased_data(deceased_confirm=""), self.deceased_data(deceased_reason="")):
             self.assertEqual(self.client.post(url, data).status_code, 200)
             self.available.refresh_from_db()
             self.assertEqual(self.available.status, "Available")
-        self.assertEqual(self.client.post(url, {"confirm": "on", "password": "Trail123!"}).status_code, 302)
+        self.assertEqual(self.client.post(url, self.deceased_data()).status_code, 302)
         self.available.refresh_from_db()
-        self.assertEqual(self.available.status, "Euthanized")
-        self.assertEqual(self.available.euthanized_by, self.employee)
-        self.assertIsNotNone(self.available.euthanized_at)
+        self.assertEqual(self.available.status, "Deceased")
+        self.assertEqual(self.available.deceased_reason, "Natural causes")
+        self.assertEqual(self.available.deceased_by, self.employee)
+        self.assertIsNotNone(self.available.deceased_at)
         self.assertTrue(self.available.history.filter(summary__icontains="password verification").exists())
 
     def test_volunteer_cannot_confirm_euthanasia(self):
         self.login(self.volunteer)
-        response = self.client.post(reverse("animal_euthanize", args=[self.available.pk]), {"confirm": "on", "password": "Trail123!"})
+        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.deceased_data())
         self.assertEqual(response.status_code, 403)
 
     def test_regular_editor_cannot_set_euthanized_status(self):
         self.login(self.employee)
-        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.animal_form_data(status="Euthanized"))
+        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.animal_form_data(status="Deceased"))
         self.assertEqual(response.status_code, 200)
         self.available.refresh_from_db()
         self.assertEqual(self.available.status, "Available")
@@ -80,14 +94,16 @@ class TailTrailsTests(TestCase):
         from django.core.exceptions import ValidationError
         from django.db import DatabaseError, transaction
         self.login(self.admin)
-        self.client.post(reverse("animal_euthanize", args=[self.available.pk]), {"confirm": "on", "password": "Trail123!"})
+        self.client.post(reverse("animal_edit", args=[self.available.pk]), self.deceased_data())
         self.available.refresh_from_db()
         self.available.status = "Available"
         with self.assertRaises(ValidationError): self.available.save()
         with self.assertRaises(DatabaseError), transaction.atomic():
             Animal.objects.filter(pk=self.available.pk).update(status="Available")
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            Animal.objects.filter(pk=self.available.pk).update(deceased_reason="Changed reason")
         self.available.refresh_from_db()
-        self.assertEqual(self.available.status, "Euthanized")
+        self.assertEqual(self.available.status, "Deceased")
 
     def test_archived_records_are_hidden_except_staff_opt_in(self):
         Animal.objects.filter(pk=self.available.pk).update(is_archived=True)
@@ -107,7 +123,7 @@ class TailTrailsTests(TestCase):
 
     def test_archive_and_restore_does_not_reverse_euthanasia(self):
         self.login(self.admin)
-        self.client.post(reverse("animal_euthanize", args=[self.available.pk]), {"confirm": "on", "password": "Trail123!"})
+        self.client.post(reverse("animal_edit", args=[self.available.pk]), self.deceased_data())
         url = reverse("animal_edit", args=[self.available.pk])
         for archived in (True, False):
             data = self.animal_form_data(status="Available")
@@ -115,7 +131,26 @@ class TailTrailsTests(TestCase):
             self.assertEqual(self.client.post(url, data).status_code, 302)
             self.available.refresh_from_db()
             self.assertEqual(self.available.is_archived, archived)
-            self.assertEqual(self.available.status, "Euthanized")
+            self.assertEqual(self.available.status, "Deceased")
+
+    def test_create_new_profile_with_photo_opens_crop_batch(self):
+        self.login(self.employee)
+        upload = SimpleUploadedFile("arrival.png", PNG_BYTES, content_type="image/png")
+        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="New photo arrival", photos=upload))
+        self.assertEqual(response.status_code, 302)
+        animal = Animal.objects.get(name="New photo arrival")
+        self.assertTrue(animal.photo_upload_batches.exists())
+        self.assertIn("photo-batches", response.url)
+
+    def test_create_deceased_profile_and_missing_field_summary(self):
+        self.login(self.employee)
+        response = self.client.post(reverse("animal_new"), self.deceased_data(name="Deceased arrival"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Animal.objects.get(name="Deceased arrival").status, "Deceased")
+        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="", public_description=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The profile was not saved")
+        self.assertContains(response, "Required when the animal is available")
 
     def animal_form_data(self, **overrides):
         data = {

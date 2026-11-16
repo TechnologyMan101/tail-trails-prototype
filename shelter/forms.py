@@ -22,21 +22,35 @@ class MultipleFileField(forms.FileField):
 
 
 class AnimalForm(forms.ModelForm):
+    deceased_reason = forms.CharField(required=False, label="Reason for deceased status", widget=forms.Textarea(attrs={"rows": 3}))
+    deceased_confirm = forms.BooleanField(required=False, label="I confirm this animal is deceased and understand this status is permanent.")
+    deceased_password = forms.CharField(required=False, label="Your current password", strip=False, widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}))
     photos = MultipleFileField(required=False, help_text=f"JPG, PNG, HEIC, or HEIF, up to {settings.MAX_PHOTO_SIZE_MB} MiB each; five total.")
 
     def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
-        if self.instance.status == "Euthanized":
+        self.was_deceased = self.instance.status == "Deceased"
+        if self.instance.status == "Deceased":
             self.fields["status"].disabled = True
             self.fields["status"].help_text = "This confirmed status is permanent."
-        else:
-            self.fields["status"].choices = [(value, label) for value, label in self.fields["status"].choices if value != "Euthanized"]
         if self.instance.pk and self.instance.photos.count() >= 5:
             self.fields["photos"].widget.attrs.update({
                 "disabled": True,
                 "aria-disabled": "true",
                 "data-photo-limit-reached": "true",
             })
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("status") == "Deceased" and not self.was_deceased:
+            if not cleaned.get("deceased_reason", "").strip():
+                self.add_error("deceased_reason", "Enter a reason for recording this animal as deceased.")
+            if not cleaned.get("deceased_confirm"):
+                self.add_error("deceased_confirm", "Confirm that you understand this status is permanent.")
+            if not self.user or not self.user.check_password(cleaned.get("deceased_password", "")):
+                self.add_error("deceased_password", "Enter your correct current password.")
+        return cleaned
 
     class Meta:
         model = Animal
@@ -52,21 +66,6 @@ class AnimalForm(forms.ModelForm):
             if photo.size > settings.MAX_PHOTO_SIZE_MB * 1024 * 1024: raise forms.ValidationError(f"{photo.name} is larger than {settings.MAX_PHOTO_SIZE_MB} MiB.")
             validate_photo_upload(photo)
         return photos
-
-
-class EuthanasiaConfirmationForm(forms.Form):
-    confirm = forms.BooleanField(label="I confirm this animal was euthanized and understand this status cannot be reversed.")
-    password = forms.CharField(label="Your current password", strip=False, widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}))
-
-    def __init__(self, *args, user, **kwargs):
-        self.user = user
-        super().__init__(*args, **kwargs)
-
-    def clean_password(self):
-        password = self.cleaned_data["password"]
-        if not self.user.check_password(password):
-            raise forms.ValidationError("Your password is incorrect.")
-        return password
 
 
 class SubmissionForm(forms.ModelForm):

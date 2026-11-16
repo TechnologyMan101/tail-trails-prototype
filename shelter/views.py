@@ -18,7 +18,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from .forms import AccountForm, AnimalForm, EuthanasiaConfirmationForm, OrganizationForm, SubmissionForm, UserManageForm, VolunteerHourForm
+from .forms import AccountForm, AnimalForm, OrganizationForm, SubmissionForm, UserManageForm, VolunteerHourForm
 from .branding import favicon_urls
 from .branding_images import branding_preview_bytes, delete_branding_asset, process_branding_asset, validate_branding_upload
 from .diagnostics import system_snapshot
@@ -105,7 +105,7 @@ def animal_profile(request, pk):
 def animal_edit(request, pk=None):
     animal = get_object_or_404(Animal, pk=pk) if pk else None
     if request.method == "POST":
-        form = AnimalForm(request.POST, request.FILES, instance=animal)
+        form = AnimalForm(request.POST, request.FILES, instance=animal, user=request.user)
         remove_ids = {int(x) for x in request.POST.getlist("remove_photo") if x.isdigit()}
         primary_photo_id = request.POST.get("primary_photo", "")
         make_new_primary = request.POST.get("make_new_primary") == "1"
@@ -125,9 +125,14 @@ def animal_edit(request, pk=None):
                     if animal:
                         # Recheck under lock after validation to reject stale editor saves.
                         locked = Animal.objects.select_for_update().get(pk=animal.pk)
-                        if locked.status == "Euthanized" and form.cleaned_data.get("status") != "Euthanized":
-                            raise ValidationError("This animal was confirmed euthanized while you were editing. Reload the record.")
+                        if locked.status == "Deceased" and form.cleaned_data.get("status") != "Deceased":
+                            raise ValidationError("This animal was confirmed deceased while you were editing. Reload the record.")
                     obj = form.save(commit=False)
+                    confirming_deceased = obj.status == "Deceased" and not form.was_deceased
+                    if confirming_deceased:
+                        obj.deceased_at = timezone.now()
+                        obj.deceased_by = request.user
+                        obj.deceased_reason = form.cleaned_data["deceased_reason"].strip()
                     if not obj.animal_id:
                         number = 1001
                         while Animal.objects.filter(animal_id=f"TT-{number}").exists(): number += 1
@@ -145,6 +150,7 @@ def animal_edit(request, pk=None):
                         for position, photo in enumerate(photos): photo.position = position
                         AnimalPhoto.objects.bulk_update(photos, ["position"])
                     summary = "Animal profile updated" if animal else "Animal profile created"
+                    if confirming_deceased: summary += "; Deceased status permanently confirmed with password verification"
                     if animal and locked.is_archived != obj.is_archived: summary += "; record archived" if obj.is_archived else "; record restored from archive"
                     AnimalHistory.objects.create(animal=obj, user=request.user, summary=summary)
                     batch = create_photo_batch(
@@ -159,27 +165,15 @@ def animal_edit(request, pk=None):
                 return redirect("animal_profile", pk=obj.pk)
             except ValidationError as exc:
                 form.add_error("photos", " ".join(exc.messages))
-    else: form = AnimalForm(instance=animal)
+    else: form = AnimalForm(instance=animal, user=request.user)
     selected_primary_id = request.POST.get("primary_photo", "") if request.method == "POST" else str(animal.primary_photo.pk) if animal and animal.primary_photo else ""
     resumable = PhotoUploadBatch.objects.filter(user=request.user, animal=animal, workflow=PhotoUploadBatch.Workflow.STAFF, status__in=(PhotoUploadBatch.Status.PENDING, PhotoUploadBatch.Status.FAILED)).first() if animal else None
     return render(request, "animal_form.html", {"form": form, "animal": animal, "selected_primary_id": selected_primary_id, "resumable_batch": resumable})
 
 @roles("Administrator", "Employee")
 def animal_euthanize(request, pk):
-    animal = get_object_or_404(Animal, pk=pk)
-    form = EuthanasiaConfirmationForm(request.POST or None, user=request.user)
-    if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            animal = Animal.objects.select_for_update().get(pk=pk)
-            if animal.status != "Euthanized":
-                animal.status = "Euthanized"
-                animal.euthanized_at = timezone.now()
-                animal.euthanized_by = request.user
-                animal.save(update_fields=["status", "euthanized_at", "euthanized_by", "updated_at"])
-                AnimalHistory.objects.create(animal=animal, user=request.user, summary="Euthanized status permanently confirmed with password verification")
-        messages.success(request, "Euthanized status permanently confirmed.")
-        return redirect("animal_profile", pk=pk)
-    return render(request, "animal_euthanize.html", {"animal": animal, "form": form})
+    get_object_or_404(Animal, pk=pk)
+    return redirect("animal_edit", pk=pk)
 
 
 @roles("Volunteer")
