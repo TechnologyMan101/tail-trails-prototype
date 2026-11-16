@@ -1,6 +1,39 @@
 const $ = (selector, context = document) => context.querySelector(selector);
 const $$ = (selector, context = document) => [...context.querySelectorAll(selector)];
 
+// Preserve the photo slot and its caption when a stored or remote image is missing.
+const photoImageSelector = '.submission-photo img,.photo-manager-card>img,.animal-photo img,.gallery-main img,.gallery-thumb img,.gallery-lightbox img,.summary-card>img';
+const showUnavailablePhoto = (photo) => {
+  if (!(photo instanceof HTMLImageElement) || !photo.matches(photoImageSelector)) return;
+  if (photo.nextElementSibling?.classList.contains('photo-unavailable')) return;
+  const placeholder = document.createElement('span');
+  placeholder.className = 'photo-unavailable';
+  placeholder.setAttribute('role', 'img');
+  placeholder.setAttribute('aria-label', `Photo unavailable. ${photo.alt || ''}`.trim());
+  const icon = document.createElement('span');
+  icon.className = 'photo-unavailable-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '▧';
+  const label = document.createElement('span');
+  label.textContent = 'Photo unavailable';
+  placeholder.append(icon, label);
+  photo.hidden = true;
+  photo.after(placeholder);
+};
+document.addEventListener('error', (event) => showUnavailablePhoto(event.target), true);
+document.addEventListener('load', (event) => {
+  const photo = event.target;
+  if (photo instanceof HTMLImageElement && photo.matches(photoImageSelector) && photo.naturalWidth) {
+    if (photo.nextElementSibling?.classList.contains('photo-unavailable')) {
+      photo.nextElementSibling.remove();
+      photo.hidden = false;
+    }
+  }
+}, true);
+$$(photoImageSelector).forEach((photo) => {
+  if (photo.complete && !photo.naturalWidth) showUnavailablePhoto(photo);
+});
+
 $$('[data-dialog-open]').forEach((button) => button.addEventListener('click', () => {
   document.getElementById(button.dataset.dialogOpen)?.showModal();
 }));

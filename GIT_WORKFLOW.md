@@ -35,7 +35,7 @@ The root `VERSION` file is the only application-version source. Django reads it 
 For a new iteration, change only `VERSION` before testing and committing:
 
 ```bash
-printf '%s\n' '2026.11.16.8' > VERSION
+printf '%s\n' '2026.11.16.9' > VERSION
 ```
 
 Use the same value for the release commit, annotated Git tag, ZIP, and overview PDF. Do not add `APP_VERSION` to `.env` or Compose.
