@@ -95,10 +95,83 @@ if (gallery) {
 const initializePhotoEditor = (photoEditor) => {
   if (!photoEditor || photoEditor.dataset.uploadInitialized === 'true') return;
   photoEditor.dataset.uploadInitialized = 'true';
+  const animalValue = (name) => {
+    const control = $(`[name="${name}"]`, photoEditor);
+    return control?.type === 'checkbox' ? control.checked : control?.value;
+  };
+  const setAnimalField = (name, active, {required = false, grey = false} = {}) => {
+    const row = $(`[data-animal-field="${name}"]`, photoEditor);
+    if (!row) return;
+    row.hidden = !active && !grey;
+    row.classList.toggle('inactive-field', !active && grey);
+    const label = $('label', row);
+    if (label) label.textContent = label.textContent.replace(/\s*\*$/, '') + (active && required ? ' *' : '');
+    $$('input,select,textarea', row).forEach((control) => {
+      control.disabled = !active;
+      control.required = active && required;
+    });
+  };
+  const syncAnimalFields = () => {
+    const stray = animalValue('intake_type') === 'Stray';
+    setAnimalField('intake_location', stray, {grey: true, required: true});
+    setAnimalField('found_by', stray, {grey: true});
+    setAnimalField('previous_owner', animalValue('intake_type') === 'Owner Surrender');
+    const kennel = animalValue('held_at') === 'Kennel';
+    const foster = animalValue('held_at') === 'Foster Home';
+    ['specific_location', 'kennel_id'].forEach((name) => setAnimalField(name, kennel, {required: true}));
+    ['foster_phone', 'foster_address'].forEach((name) => setAnimalField(name, foster, {required: true}));
+    setAnimalField('foster_caregiver', foster);
+    setAnimalField('microchip', Boolean(animalValue('has_microchip')), {grey: true, required: true});
+    ['litter_size', 'litter_dob'].forEach((name) => setAnimalField(name, animalValue('spay_status') === 'Nursing', {required: true}));
+    setAnimalField('leash_skills', ['Dog', 'Cat'].includes(animalValue('species')));
+  };
+  ['intake_type', 'held_at', 'has_microchip', 'spay_status', 'species'].forEach((name) => {
+    $(`[name="${name}"]`, photoEditor)?.addEventListener('change', syncAnimalFields);
+  });
+  syncAnimalFields();
+  $$('[data-chip-input]', photoEditor).forEach((input) => {
+    const pool = JSON.parse(input.dataset.chipSuggestions || '[]');
+    const selected = document.createElement('div'); selected.className = 'selected-chips';
+    selected.setAttribute('aria-label', `Selected ${input.name}`);
+    const details = document.createElement('details'); details.className = 'suggestion-picker';
+    const summary = document.createElement('summary'); summary.textContent = input.name === 'breed' ? 'Choose breed suggestions' : 'Choose coat pattern suggestions';
+    const filter = document.createElement('input'); filter.type = 'search'; filter.placeholder = 'Filter suggestions'; filter.setAttribute('aria-label', `Filter ${input.name} suggestions`);
+    const options = document.createElement('div'); options.className = 'suggestion-chips';
+    details.append(summary, filter, options); input.after(selected, details);
+    const values = () => [...new Set(input.value.split(',').map((s) => s.trim()).filter(Boolean))];
+    const toggle = (value) => {
+      const current = values();
+      input.value = current.includes(value) ? current.filter((s) => s !== value).join(', ') : [...current, value].join(', ');
+      input.dispatchEvent(new Event('input', {bubbles: true}));
+    };
+    const refresh = () => {
+      const current = values(); selected.replaceChildren();
+      current.forEach((value) => {
+        const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'selected-chip'; chip.textContent = `${value} ×`;
+        chip.setAttribute('aria-label', `Remove ${value}`); chip.addEventListener('click', () => { toggle(value); input.focus(); }); selected.append(chip);
+      });
+      $$('button', options).forEach((button) => {
+        button.setAttribute('aria-pressed', String(current.includes(button.textContent)));
+        button.hidden = !button.textContent.toLowerCase().includes(filter.value.toLowerCase());
+      });
+    };
+    const updatePool = () => {
+      const suggestions = Array.isArray(pool) ? pool : (pool[animalValue('species')] || []);
+      options.replaceChildren();
+      suggestions.forEach((value) => {
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = value;
+        button.addEventListener('click', () => toggle(value)); options.append(button);
+      });
+      summary.textContent = `${input.name === 'breed' ? 'Breed' : 'Coat pattern'} suggestions (${suggestions.length})`;
+      refresh();
+    };
+    input.addEventListener('input', refresh); filter.addEventListener('input', refresh);
+    $('[name="species"]', photoEditor)?.addEventListener('change', updatePool);
+    updatePool();
+  });
   const statusSelect = $('[name="status"]', photoEditor);
   const deceasedSection = $('[data-deceased-confirmation]', photoEditor);
   if (statusSelect && deceasedSection) {
-    statusSelect.closest('.field-row')?.after(deceasedSection);
     const syncDeceasedFields = () => {
       const selected = statusSelect.value === 'Deceased';
       deceasedSection.hidden = !selected;

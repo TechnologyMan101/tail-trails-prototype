@@ -156,13 +156,101 @@ class TailTrailsTests(TestCase):
         data = {
             "name":"Milo", "species":"Dog", "breed":"Mix", "age":"3", "age_unit":"Years", "sex":"Male",
             "intake_date":date.today(), "intake_type":"Stray", "intake_location":"Main", "held_at":"Kennel",
-            "specific_location":"North", "kennel_id":"A1", "placed_date":date.today(), "color":"Tan",
-            "spay_status":"Neutered", "status":"Available", "public_description":"Friendly dog",
-            "vaccination_status":"Unknown", "heartworm_status":"Unknown", "flea_prevention":"Unknown",
+            "specific_location":"North", "kennel_id":"A1", "placed_date":date.today(), "color":["Tan"],
+            "spay_status":"Spayed/Neutered", "status":"Available", "public_description":"Friendly dog",
+            "vaccination_status":"", "heartworm_status":"Unknown", "fleas_status":"",
             "energy_level":"Unknown", "house_trained":"Unknown", "leash_skills":"Unknown",
         }
         data.update(overrides)
         return data
+
+    def test_intake_dropdown_and_stray_fields_ignore_inactive_input(self):
+        from shelter.animal_options import INTAKES
+        form = AnimalForm(data=self.animal_form_data(intake_type="Owner Surrender", intake_location="Forged stray location", found_by="Ignored", previous_owner="Former owner"), user=self.employee)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.fields["intake_location"].disabled)
+        self.assertTrue(form.fields["found_by"].disabled)
+        self.assertFalse(form.fields["previous_owner"].disabled)
+        self.assertEqual(form.cleaned_data["intake_location"], "")
+        self.assertEqual(form.cleaned_data["found_by"], "")
+        self.assertEqual(form.cleaned_data["previous_owner"], "Former owner")
+        self.assertEqual(len(INTAKES), 6)
+        stray = AnimalForm(data=self.animal_form_data(intake_location=""), user=self.employee)
+        self.assertFalse(stray.is_valid())
+        self.assertIn("intake_location", stray.errors)
+
+    def test_foster_requires_contact_fields_and_ignores_kennel_fields(self):
+        invalid = AnimalForm(data=self.animal_form_data(held_at="Foster Home", specific_location="", kennel_id=""), user=self.employee)
+        self.assertFalse(invalid.is_valid())
+        self.assertIn("foster_phone", invalid.errors)
+        self.assertIn("foster_address", invalid.errors)
+        valid = AnimalForm(data=self.animal_form_data(held_at="Foster Home", specific_location="", kennel_id="", foster_phone="(619) 555-0100", foster_address="1 Example Street"), user=self.employee)
+        self.assertTrue(valid.is_valid(), valid.errors)
+        self.assertTrue(valid.fields["kennel_id"].disabled)
+        self.assertEqual(valid.fields["specific_location"].label, "Kennel location")
+
+    def test_nursing_requires_litter_size_and_dob_only_when_selected(self):
+        invalid = AnimalForm(data=self.animal_form_data(spay_status="Nursing"), user=self.employee)
+        self.assertFalse(invalid.is_valid())
+        self.assertIn("litter_size", invalid.errors)
+        self.assertIn("litter_dob", invalid.errors)
+        valid = AnimalForm(data=self.animal_form_data(spay_status="Nursing", litter_size="3", litter_dob="2026-11-01"), user=self.employee)
+        self.assertTrue(valid.is_valid(), valid.errors)
+        not_nursing = AnimalForm(data=self.animal_form_data(litter_size="invalid", litter_dob="invalid"), user=self.employee)
+        self.assertTrue(not_nursing.is_valid(), not_nursing.errors)
+        self.assertIsNone(not_nursing.cleaned_data["litter_size"])
+
+    def test_microchip_checkbox_controls_id_requirement(self):
+        missing = AnimalForm(data=self.animal_form_data(has_microchip="on", microchip=""), user=self.employee)
+        self.assertFalse(missing.is_valid())
+        self.assertIn("microchip", missing.errors)
+        present = AnimalForm(data=self.animal_form_data(has_microchip="on", microchip="123456789"), user=self.employee)
+        self.assertTrue(present.is_valid(), present.errors)
+        unchecked = AnimalForm(data=self.animal_form_data(microchip="ignored"), user=self.employee)
+        self.assertTrue(unchecked.is_valid(), unchecked.errors)
+        self.assertEqual(unchecked.cleaned_data["microchip"], "")
+
+    def test_multicolor_custom_breed_and_patterns_save_and_search(self):
+        self.login(self.employee)
+        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="Multicolor arrival", breed="Labrador Retriever, Custom Mix", coat_pattern="Brindle, Bicolor", color=["Black", "White"]))
+        self.assertEqual(response.status_code, 302)
+        animal = Animal.objects.get(name="Multicolor arrival")
+        self.assertEqual(animal.color, "Black, White")
+        self.assertEqual(animal.breed, "Labrador Retriever, Custom Mix")
+        self.assertEqual(animal.coat_pattern, "Brindle, Bicolor")
+        page = self.client.get(reverse("animals") + "?color=White")
+        self.assertIn(animal.pk, [a.pk for a in page.context["animals"]])
+
+    def test_medical_selects_defaults_and_species_conditional_leash(self):
+        form = AnimalForm()
+        for name in ("vaccination_status", "fleas_status", "house_trained", "leash_skills"):
+            self.assertIn(("", "---------"), list(form.fields[name].choices))
+        for removed in ("energy_level", "spay_notes", "flea_prevention"):
+            self.assertNotIn(removed, form.fields)
+        rabbit = AnimalForm(data=self.animal_form_data(species="Rabbit", leash_skills="invalid", age_unit="Weeks"), user=self.employee)
+        self.assertTrue(rabbit.is_valid(), rabbit.errors)
+        self.assertTrue(rabbit.fields["leash_skills"].disabled)
+        invalid = AnimalForm(data=self.animal_form_data(vaccination_status="anything", fleas_status="anything", house_trained="anything"), user=self.employee)
+        self.assertFalse(invalid.is_valid())
+        for field in ("vaccination_status", "fleas_status", "house_trained"): self.assertIn(field, invalid.errors)
+
+    def test_age_sort_accounts_for_weeks_months_and_years(self):
+        self.login(self.employee)
+        Animal.objects.filter(pk=self.available.pk).update(age=8, age_unit="Weeks")
+        Animal.objects.filter(pk=self.hidden.pk).update(age=1, age_unit="Years")
+        animals = list(self.client.get(reverse("animals") + "?sort=age_asc").context["animals"])
+        self.assertEqual([a.pk for a in animals], [self.available.pk, self.hidden.pk])
+
+    def test_foster_contact_information_is_staff_only(self):
+        Animal.objects.filter(pk=self.available.pk).update(held_at="Foster Home", foster_phone="619-555-0199", foster_address="Private Foster Address")
+        url = reverse("animal_profile", args=[self.available.pk])
+        public = self.client.get(url)
+        self.assertNotContains(public, "619-555-0199")
+        self.assertNotContains(public, "Private Foster Address")
+        self.login(self.volunteer)
+        self.assertNotContains(self.client.get(url), "Private Foster Address")
+        self.login(self.employee)
+        self.assertContains(self.client.get(url), "Private Foster Address")
 
     def finalize_latest_batch(self, user, orientation="landscape", crop=None):
         batch = PhotoUploadBatch.objects.filter(user=user).latest("created_at")

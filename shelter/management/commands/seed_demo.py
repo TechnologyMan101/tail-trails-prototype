@@ -34,7 +34,15 @@ class Command(BaseCommand):
             "TT-1004": ["https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=1200&q=85"],
         }
         for values in records:
-            animal, _ = Animal.objects.update_or_create(animal_id=values["animal_id"], defaults=values)
+            if values["spay_status"] in ("Spayed", "Neutered"): values["spay_status"] = "Spayed/Neutered"
+            if values.get("vaccination_status") == "Vaccinated": values["vaccination_status"] = "Up to Date"
+            if values.get("leash_skills") not in ("Yes", "No", "Unknown", None): values["leash_skills"] = "Unknown"
+            if values["held_at"] == "Foster Home":
+                values.update(foster_phone="(619) 555-0123", foster_address="123 Example Lane, San Diego, CA (demo)")
+            if values["color"] == "Brindle": values.update(color="Unknown", coat_pattern="Brindle")
+            if values["color"] == "Gray / Blue": values["color"] = "Gray, Blue"
+            # Startup must not overwrite staff edits, archives, or permanent statuses.
+            animal, _ = Animal.objects.get_or_create(animal_id=values["animal_id"], defaults=values)
             if not animal.photos.exists():
                 for position, url in enumerate(photo_sets[animal.animal_id]): AnimalPhoto.objects.create(animal=animal, external_url=url, position=position)
         volunteer = User.objects.get(username="volunteer@tailtrails.test")

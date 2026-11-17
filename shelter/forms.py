@@ -7,6 +7,7 @@ from django.core.files.uploadedfile import UploadedFile
 from .models import Animal, Organization, Submission, User, VolunteerHour
 from .images import PHOTO_ACCEPT, validate_photo_upload
 from .branding_images import BRANDING_ACCEPT, validate_branding_upload
+from .animal_options import BREEDS, PATTERNS, COLORS
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -22,6 +23,8 @@ class MultipleFileField(forms.FileField):
 
 
 class AnimalForm(forms.ModelForm):
+    color = forms.MultipleChoiceField(label="Coat colors", choices=[(s, s) for s in COLORS], widget=forms.CheckboxSelectMultiple(attrs={"class": "coat-color-options"}))
+    fleas_status = forms.ChoiceField(label="Fleas", required=False, choices=[("", "---------"), ("Positive", "Positive"), ("Negative", "Negative")])
     deceased_reason = forms.CharField(required=False, label="Reason for deceased status", widget=forms.Textarea(attrs={"rows": 3}))
     deceased_confirm = forms.BooleanField(required=False, label="I confirm this animal is deceased and understand this status is permanent.")
     deceased_password = forms.CharField(required=False, label="Your current password", strip=False, widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}))
@@ -30,6 +33,37 @@ class AnimalForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        self.fields["breed"].widget = forms.TextInput(attrs={"data-chip-input": "breed", "data-chip-suggestions": json.dumps(BREEDS)})
+        self.fields["breed"].help_text = "Choose multiple breed suggestions or enter custom values separated by commas."
+        self.fields["coat_pattern"].widget = forms.TextInput(attrs={"data-chip-input": "pattern", "data-chip-suggestions": json.dumps(PATTERNS)})
+        self.fields["coat_pattern"].help_text = "Choose multiple patterns or add your own, separated by commas."
+        self.fields["specific_location"].label = "Kennel location"
+        self.fields["found_by"].label = "Found by (strays only)"
+        self.fields["intake_location"].label = "Intake location (strays only)"
+        self.fields["has_microchip"].label = "Has Microchip"
+        self.fields["microchip"].label = "Microchip ID"
+        if not self.is_bound:
+            self.initial["color"] = [s.strip() for s in (self.instance.color or "").split(",") if s.strip()]
+        for color in [s.strip() for s in (self.instance.color or "").split(",") if s.strip()]:
+            if color not in dict(self.fields["color"].choices): self.fields["color"].choices = [*self.fields["color"].choices, (color, color)]
+        value = lambda name: self.data.get(name, "") if self.is_bound else self.initial.get(name, getattr(self.instance, name, ""))
+        conditions = {
+            "intake_location": value("intake_type") == "Stray", "found_by": value("intake_type") == "Stray",
+            "previous_owner": value("intake_type") == "Owner Surrender",
+            "specific_location": value("held_at") == "Kennel", "kennel_id": value("held_at") == "Kennel",
+            "foster_caregiver": value("held_at") == "Foster Home", "foster_phone": value("held_at") == "Foster Home", "foster_address": value("held_at") == "Foster Home",
+            "microchip": forms.BooleanField(required=False).clean(value("has_microchip")),
+            "litter_size": value("spay_status") == "Nursing", "litter_dob": value("spay_status") == "Nursing",
+            "leash_skills": value("species") in ("Dog", "Cat"),
+        }
+        for name, active in conditions.items():
+            self.fields[name].required = False
+            self.fields[name].disabled = not active
+        self.fields["intake_location"].required = conditions["intake_location"]
+        self.fields["microchip"].required = conditions["microchip"]
+        for name in ("specific_location", "kennel_id", "foster_phone", "foster_address", "litter_size", "litter_dob"):
+            self.fields[name].required = conditions[name]
+        self.order_fields(["name", "species", "breed", "age", "age_unit", "sex", "intake_date", "intake_type", "previous_owner", "intake_location", "found_by", "has_microchip", "microchip", "held_at", "specific_location", "kennel_id", "foster_caregiver", "foster_phone", "foster_address", "placed_date", "expected_stay", "transfer_date", "color", "coat_pattern", "coat_type", "coat_length", "weight", "height", "medical_conditions", "medications", "vaccination_status", "vaccination_notes", "heartworm_status", "fleas_status", "spay_status", "litter_size", "litter_dob", "temperament", "good_with", "house_trained", "leash_skills", "behavior_notes", "public_description", "general_notes", "status", "is_archived"])
         self.was_deceased = self.instance.status == "Deceased"
         if self.instance.status == "Deceased":
             self.fields["status"].disabled = True
@@ -43,6 +77,7 @@ class AnimalForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        if not cleaned.get("has_microchip"): cleaned["microchip"] = ""
         if cleaned.get("status") == "Deceased" and not self.was_deceased:
             if not cleaned.get("deceased_reason", "").strip():
                 self.add_error("deceased_reason", "Enter a reason for recording this animal as deceased.")
@@ -54,12 +89,20 @@ class AnimalForm(forms.ModelForm):
 
     class Meta:
         model = Animal
-        exclude = ("animal_id", "created_at", "updated_at")
+        exclude = ("animal_id", "created_at", "updated_at", "spay_notes", "energy_level", "flea_prevention")
         widgets = {field: forms.Textarea(attrs={"rows": 3}) for field in (
             "medical_conditions", "medications", "spay_notes", "behavior_notes",
-            "previous_owner", "public_description", "general_notes",
+            "previous_owner", "public_description", "general_notes", "foster_address", "vaccination_notes",
         )}
         widgets.update({field: forms.DateInput(attrs={"type": "date"}) for field in ("intake_date", "placed_date", "transfer_date", "litter_dob")})
+    def clean_color(self):
+        return ", ".join(self.cleaned_data["color"])
+
+    def clean_foster_phone(self):
+        phone = self.cleaned_data.get("foster_phone", "").strip()
+        if not self.fields["foster_phone"].disabled and phone and not 7 <= len(re.sub(r"\D", "", phone)) <= 18:
+            raise forms.ValidationError("Enter a phone number including the area code.")
+        return phone
     def clean_photos(self):
         photos = self.cleaned_data.get("photos", [])
         for photo in photos:

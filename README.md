@@ -208,6 +208,26 @@ Migration 0009 converts existing Euthanized records to Deceased without losing t
 
 Archiving is separate and reversible: toggle **Is archived** on the edit page and save. Archived animals disappear from normal searches, homepage features, and public profiles even if their adoption status is Available. Employees and administrators can tick **Include archived records** in animal search, open an archived record, and restore it by clearing the archive checkbox. Sorting preserves the archive filter. Volunteers cannot browse archived profiles or start new submissions for them; existing submission history remains available for review and audit. Restoring an archive never reverses a confirmed deceased status. Records created before archiving was introduced default to unarchived; existing confirmations are preserved.
 
+## Structured animal intake and care fields
+
+The status and archive controls share a stable row; the conditional Deceased confirmation appears below that row. All conditional rules are enforced on the server as well as in the browser.
+
+| Selection | Form behavior |
+| --- | --- |
+| Intake type: Stray | Intake location is required; Found by is optional. Both remain visible but greyed out/disabled for other intake types. |
+| Intake type: Owner Surrender | Show Previous owner immediately after Intake type; hide it otherwise. |
+| Held at: Kennel | Show and require Kennel location and Kennel ID. |
+| Held at: Foster Home | Show and require foster phone and address; caregiver name remains optional. Contact details appear only in restricted staff records. |
+| Has Microchip | Enable and require the ID when checked; otherwise disable it and clear the saved ID. |
+| Spay/neuter: Nursing | Show and require both litter size and litter date of birth. |
+| Species: Dog or Cat | Show optional leash skills. Hide and disable it for other species. |
+
+Intake options are Stray, Owner Surrender, Animal Control, Transfer, Seizure and Other. Age units are Weeks, Months and Years; age sorting compares normalized durations. Spay/neuter choices are Spayed/Neutered, Not Spayed/Neutered, Unknown and Nursing. Vaccination status offers Up to Date, In Progress and Unvaccinated, with optional notes and a blank initial choice. Heartworm offers Positive, Negative and Unknown; fleas offers Positive and Negative with a blank initial choice. House trained and leash skills offer Yes, No and Unknown, initially blank.
+
+Breed and coat-pattern pickers support multiple suggestion chips and custom comma-separated entries. Breed pools contain 30 suggestions per species for dogs and cats; rabbit/other breeds can be entered directly. These are practical intake suggestions, not an authoritative population ranking or breed identification. Reference pools: [AKC popular breeds](https://www.akc.org/most-popular-breeds/) and [CFA popular pedigreed breeds](https://cfa.org/cat-talk/most-popular-breeds-for-2024/), supplemented with domestic coat-length types and mixed breeds. Coat colors use checkboxes; multiple colors are saved together and can be searched individually.
+
+Migration 0010 maps prior spay/neuter terms, marks existing microchip IDs as present, and separates known legacy patterns from colors. It preserves ambiguous prior medical/behavior values in vaccination notes or staff notes rather than treating old “Vaccinated” text as proof of current vaccination. Existing foster records are not assigned fabricated contact details; required missing information must be supplied on their next edit. Retired energy-level, spay-note and flea-prevention columns are retained for data preservation but removed from forms and profile displays. Permanent Deceased confirmation data stays protected through the migration. Demo seeding now creates missing records only and never overwrites staff edits or archived/permanent statuses.
+
 ## Local development and tests
 
 PostgreSQL is used in Compose. Tests can use an isolated SQLite database for speed:

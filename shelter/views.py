@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from functools import wraps
 from pathlib import Path
 from asgiref.sync import sync_to_async
@@ -10,7 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Case, When, F, FloatField
 from django.db.models.functions import Lower
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -80,15 +81,18 @@ def animals(request):
     if public: qs = qs.filter(status="Available")
     q = request.GET.get("q", "").strip()
     if q: qs = qs.filter(Q(name__icontains=q) | Q(animal_id__icontains=q))
-    for field in ("species", "sex", "status", "color", "held_at", "spay_status"):
+    for field in ("species", "sex", "status", "held_at", "spay_status"):
         if request.GET.get(field): qs = qs.filter(**{field: request.GET[field]})
+    if request.GET.get("color"):
+        qs = qs.filter(color__iregex=r"(^|,\s*)" + re.escape(request.GET["color"]) + r"(\s*,|$)")
     if request.GET.get("breed"): qs = qs.filter(breed__icontains=request.GET["breed"])
     sort = request.GET.get("sort", "name_asc")
+    qs = qs.annotate(age_days=Case(When(age_unit="Weeks", then=F("age") * 7), When(age_unit="Months", then=F("age") * 30.4375), default=F("age") * 365.25, output_field=FloatField()))
     order = {
         "name_asc": (Lower("name").asc(), "id"),
         "name_desc": (Lower("name").desc(), "id"),
-        "age_asc": ("age", "id"),
-        "age_desc": ("-age", "id"),
+        "age_asc": ("age_days", "id"),
+        "age_desc": ("-age_days", "id"),
         "id_asc": ("animal_id",),
         "id_desc": ("-animal_id",),
     }.get(sort, (Lower("name").asc(), "id"))

@@ -6,6 +6,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
+from .animal_options import INTAKES, YES_NO_UNKNOWN
 from django.utils import timezone
 
 
@@ -69,35 +70,41 @@ class Animal(models.Model):
     STATUSES = [(x, x) for x in ("Available", "Pending Adoption", "Not Available", "Deceased")]
     SEXES = [(x, x) for x in ("Male", "Female", "Unknown")]
     LOCATIONS = [(x, x) for x in ("Kennel", "Foster Home")]
-    SPAY = [(x, x) for x in ("Spayed", "Neutered", "Nursing", "Unknown")]
+    SPAY = [(x, x) for x in ("Spayed/Neutered", "Not Spayed/Neutered", "Unknown", "Nursing")]
     animal_id = models.CharField(max_length=20, unique=True, editable=False)
     name = models.CharField(max_length=100)
     species = models.CharField(max_length=20, choices=SPECIES)
-    breed = models.CharField(max_length=120)
+    breed = models.TextField()
     age = models.DecimalField(max_digits=5, decimal_places=1, validators=[MinValueValidator(0)])
-    age_unit = models.CharField(max_length=10, choices=[("Months", "Months"), ("Years", "Years")])
+    age_unit = models.CharField(max_length=10, choices=[("Weeks", "Weeks"), ("Months", "Months"), ("Years", "Years")])
     sex = models.CharField(max_length=10, choices=SEXES)
     intake_date = models.DateField()
-    intake_type = models.CharField(max_length=50)
-    intake_location = models.CharField(max_length=120)
+    intake_type = models.CharField(max_length=50, choices=INTAKES)
+    intake_location = models.CharField(max_length=120, blank=True)
     found_by = models.CharField(max_length=160, blank=True)
     microchip = models.CharField(max_length=80, blank=True)
+    has_microchip = models.BooleanField(default=False)
     held_at = models.CharField(max_length=20, choices=LOCATIONS)
-    specific_location = models.CharField(max_length=100, blank=True)
+    specific_location = models.CharField("kennel location", max_length=100, blank=True)
     kennel_id = models.CharField(max_length=50, blank=True)
     foster_caregiver = models.CharField(max_length=160, blank=True)
+    foster_phone = models.CharField(max_length=40, blank=True)
+    foster_address = models.TextField(blank=True)
     placed_date = models.DateField()
     expected_stay = models.CharField(max_length=50, blank=True)
     transfer_date = models.DateField(null=True, blank=True)
-    color = models.CharField(max_length=50)
+    color = models.TextField()
+    coat_pattern = models.TextField(blank=True)
     coat_type = models.CharField(max_length=50, blank=True)
     coat_length = models.CharField(max_length=30, blank=True)
     weight = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     height = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     medical_conditions = models.TextField(blank=True)
     medications = models.TextField(blank=True)
-    vaccination_status = models.CharField(max_length=50, default="Unknown")
-    heartworm_status = models.CharField(max_length=50, default="Unknown")
+    vaccination_status = models.CharField(max_length=50, blank=True, default="", choices=[(s, s) for s in ("Up to Date", "In Progress", "Unvaccinated")])
+    vaccination_notes = models.TextField(blank=True)
+    fleas_status = models.CharField(max_length=10, blank=True, choices=[("Positive", "Positive"), ("Negative", "Negative")])
+    heartworm_status = models.CharField(max_length=50, default="Unknown", choices=[(s, s) for s in ("Positive", "Negative", "Unknown")])
     flea_prevention = models.CharField(max_length=20, default="Unknown")
     spay_status = models.CharField(max_length=20, choices=SPAY)
     spay_notes = models.TextField(blank=True)
@@ -106,8 +113,8 @@ class Animal(models.Model):
     temperament = models.CharField(max_length=200, blank=True)
     good_with = models.CharField(max_length=200, blank=True)
     energy_level = models.CharField(max_length=20, default="Unknown")
-    house_trained = models.CharField(max_length=20, default="Unknown")
-    leash_skills = models.CharField(max_length=30, default="Unknown")
+    house_trained = models.CharField(max_length=20, blank=True, default="", choices=YES_NO_UNKNOWN)
+    leash_skills = models.CharField(max_length=30, blank=True, default="", choices=YES_NO_UNKNOWN)
     behavior_notes = models.TextField(blank=True)
     previous_owner = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=STATUSES)
@@ -134,8 +141,13 @@ class Animal(models.Model):
         errors = {}
         if self.status == "Available" and not self.public_description.strip(): errors["public_description"] = "Required when the animal is available."
         if self.held_at == "Kennel" and (not self.specific_location or not self.kennel_id): errors["specific_location"] = "Kennel location and ID are required."
-        if self.held_at == "Foster Home" and not self.foster_caregiver: errors["foster_caregiver"] = "A foster caregiver is required."
+        if self.held_at == "Foster Home":
+            if not self.foster_phone.strip(): errors["foster_phone"] = "Foster phone number is required."
+            if not self.foster_address.strip(): errors["foster_address"] = "Foster address is required."
+        if self.intake_type == "Stray" and not self.intake_location.strip(): errors["intake_location"] = "Intake location is required for a stray."
+        if self.has_microchip and not self.microchip.strip(): errors["microchip"] = "Microchip ID is required when Has Microchip is checked."
         if self.spay_status == "Nursing" and not self.litter_size: errors["litter_size"] = "Litter size is required for a nursing animal."
+        if self.spay_status == "Nursing" and not self.litter_dob: errors["litter_dob"] = "Litter date of birth is required for a nursing animal."
         if errors: raise ValidationError(errors)
 
     @property
