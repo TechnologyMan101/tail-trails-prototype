@@ -129,9 +129,8 @@ styles = {
 # Explicit embedded faces preserve headings, code alignment and tree glyphs.
 font_root = ROOT / "tools/fonts"
 for name, filename in [
-    ("OverviewSans", "DejaVuSans.ttf"),
-    ("OverviewBold", "DejaVuSans-Bold.ttf"),
-    ("OverviewHeading", "DejaVuSerif-Bold.ttf"),
+    ("OverviewSans", "LiberationSans-Regular.ttf"),
+    ("OverviewBold", "LiberationSans-Bold.ttf"),
     ("OverviewMono", "DejaVuSansMono.ttf"),
 ]:
     pdfmetrics.registerFont(TTFont(name, str(font_root / filename)))
@@ -144,7 +143,7 @@ pdfmetrics.registerFontFamily(
 )
 for name, style in styles.items():
     style.fontName = {
-        "title": "OverviewHeading", "h1": "OverviewHeading",
+        "title": "OverviewBold", "h1": "OverviewBold",
         "h2": "OverviewBold", "th": "OverviewBold", "code": "OverviewMono",
     }.get(name, "OverviewSans")
 story = []
