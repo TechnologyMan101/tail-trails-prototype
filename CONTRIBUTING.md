@@ -30,6 +30,7 @@ Install the locked dependencies and run:
 DB_ENGINE=sqlite python manage.py test
 DB_ENGINE=sqlite python manage.py makemigrations --check --dry-run
 node --check static/app.js
+node tests/test_branding_ui.js
 node tests/test_unsigned_inputs.js
 ```
 

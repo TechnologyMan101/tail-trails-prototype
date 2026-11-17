@@ -119,7 +119,7 @@ class Command(BaseCommand):
                 "good_with": "Children",
                 "behavior_notes": "Enjoys leafy greens and cardboard tunnels.",
                 "general_notes": "Transfer paperwork verified.",
-                "vaccination_status": "",
+                "vaccination_status": "Unvaccinated",
                 "leash_skills": "",
                 "heartworm_status": "Unknown",
                 "fleas_status": "Negative",

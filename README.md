@@ -62,8 +62,9 @@ Animal forms enforce these rules in both the browser and server:
 | Dog or Cat | Show optional Yes/No/Unknown leash skills |
 | Fleas | Required Positive/Negative selection; initially blank |
 | Heartworm | Required Positive/Negative/Unknown selection; initially blank |
+| Vaccination status | Required Up to Date/In Progress/Unvaccinated selection; initially blank; optional notes |
 
-Intake types are Stray, Owner Surrender, Animal Control, Transfer, Seizure and Other. Spay/neuter choices are Spayed/Neutered, Not Spayed/Neutered, Nursing and Unknown. Vaccination status offers Up to Date/In Progress/Unvaccinated or blank, plus notes. House trained offers Yes/No/Unknown or blank. Breed and coat pattern support multiple suggestion chips and custom values, with counts and an explicit no-match state. Color checkboxes are Black, White, Blue/Gray, Red/Orange, Tan, Cream, Brown and Silver. Coat length is Short/Medium/Long or blank.
+Intake types are Stray, Owner Surrender, Animal Control, Transfer, Seizure and Other. Spay/neuter choices are Spayed/Neutered, Not Spayed/Neutered, Nursing and Unknown. Vaccination status requires Up to Date/In Progress/Unvaccinated, with optional notes and no preselected value. House trained offers Yes/No/Unknown or blank. Breed and coat pattern support multiple suggestion chips and custom values, with counts and an explicit no-match state. Color checkboxes are Black, White, Blue/Gray, Red/Orange, Tan, Cream, Brown and Silver. Coat length is Short/Medium/Long or blank.
 
 Age uses Weeks/Months/Years with one decimal place. Weight is kg to 0.001 and height is cm to 0.1. Unsigned text controls reject negative typing/pastes without scroll-wheel increments; server validation also rejects negative submissions. Age, measurements and entered Total Hours permit zero. Nursing litter size must be at least 1; an activity must be at least 0.01 hours. The stored manual hour adjustment remains signed to support downward total corrections.
 
@@ -109,7 +110,7 @@ Branding uses synchronized color pickers/hex values and the shared fixed-image c
 | Banner | JPG/PNG/HEIC/HEIF | 1920×640 progressive JPG by default |
 | Favicon | JPG/PNG | 32×32 and 180×180 PNG variants |
 
-Preview/final uploads show progress. Image changes start the configured crop-session timer; name/color-only edits do not. Preview responses create no stored pending assets. Discard drops browser selections; saved settings change only after Save succeeds. Originals are retained privately when saved. Browser-icon fallback is dedicated favicon, then logo, then a color-matched heart. Generated filenames change with branding content. The homepage banner has a dark overlay for text readability.
+Preview/final uploads show progress. Selecting an image or moving/resizing its crop starts the configured crop-session timer; opening the page, resizing the window and name/color-only edits do not. The unsaved-image notice separates the countdown from its explanatory text and provides a distinct discard button. Preview responses create no stored pending assets. Discard drops browser selections; saved settings change only after Save succeeds. A successful save navigates to freshly initialized settings with the saved crops. Validation or connection errors preserve browser selections and crops for retry. Originals are retained privately when saved. Browser-icon fallback is dedicated favicon, then logo, then a color-matched heart. Generated filenames change with branding content. The homepage banner has a dark overlay for text readability.
 
 ## Environment and reverse proxy
 
@@ -154,6 +155,7 @@ Checks:
 ```bash
 DB_ENGINE=sqlite python manage.py test
 DB_ENGINE=sqlite python manage.py makemigrations --check --dry-run
+node tests/test_branding_ui.js
 node tests/test_unsigned_inputs.js  # Optional; requires Node.js
 ```
 

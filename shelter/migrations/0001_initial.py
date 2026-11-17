@@ -383,13 +383,11 @@ class Migration(migrations.Migration):
                 (
                     "vaccination_status",
                     models.CharField(
-                        blank=True,
                         choices=[
                             ("Up to Date", "Up to Date"),
                             ("In Progress", "In Progress"),
                             ("Unvaccinated", "Unvaccinated"),
                         ],
-                        default="",
                         max_length=50,
                     ),
                 ),

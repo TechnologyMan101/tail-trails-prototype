@@ -26,6 +26,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.cache import never_cache
 from .forms import (
     AccountForm,
     AnimalForm,
@@ -737,6 +738,7 @@ def user_toggle(request, pk):
 
 
 @roles("Administrator")
+@never_cache
 def organization(request):
     org = Organization.current()
     form = OrganizationForm(request.POST or None, request.FILES or None, instance=org)
@@ -747,6 +749,20 @@ def organization(request):
         "branding_max_size": settings.BRANDING_MAX_SIZE_MB,
         "branding_timeout_seconds": max(1, settings.PHOTO_BATCH_TTL_MINUTES) * 60,
     }
+
+    def invalid_response():
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse(
+                {
+                    "errors": form.errors.get_json_data(),
+                    "field_labels": {
+                        name: field.label for name, field in form.fields.items()
+                    },
+                },
+                status=400,
+            )
+        return render(request, "organization.html", context)
+
     if request.method == "POST" and form.is_valid():
         deadline = request.session.get("branding_image_deadline")
         image_changes = any(
@@ -760,7 +776,7 @@ def organization(request):
                 None,
                 "The image editing session expired. Reload and select your images again.",
             )
-            return render(request, "organization.html", context)
+            return invalid_response()
         org = form.save()
         try:
             for kind in ("logo", "banner", "favicon"):
@@ -775,15 +791,20 @@ def organization(request):
                     process_branding_asset(org, kind, upload=upload, crop=crop)
         except ValidationError as exc:
             form.add_error(None, exc)
-            return render(request, "organization.html", context)
+            return invalid_response()
         favicon_urls(org, force=True)
         messages.success(request, "Organization settings saved.")
         request.session.pop("branding_image_deadline", None)
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"redirect_url": reverse("organization")})
         return redirect("organization")
+    if request.method == "POST":
+        return invalid_response()
     return render(request, "organization.html", context)
 
 
 @roles("Administrator")
+@never_cache
 def branding_preview(request, kind):
     if kind not in {"logo", "banner", "favicon"}:
         raise Http404

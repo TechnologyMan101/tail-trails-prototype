@@ -289,7 +289,7 @@ class TailTrailsTests(TestCase):
             "spay_status": "Spayed/Neutered",
             "status": "Available",
             "public_description": "Friendly dog",
-            "vaccination_status": "",
+            "vaccination_status": "Up to Date",
             "heartworm_status": "Unknown",
             "fleas_status": "Negative",
             "house_trained": "Unknown",
@@ -298,10 +298,10 @@ class TailTrailsTests(TestCase):
         data.update(overrides)
         return data
 
-    def test_fleas_and_heartworm_are_required_without_invented_defaults(self):
+    def test_medical_statuses_are_required_without_invented_defaults(self):
         self.login(self.employee)
         form = AnimalForm()
-        for name in ("fleas_status", "heartworm_status"):
+        for name in ("fleas_status", "heartworm_status", "vaccination_status"):
             self.assertTrue(form.fields[name].required)
             self.assertEqual(list(form.fields[name].choices)[0][0], "")
             data = self.animal_form_data(name="Missing medical value")
@@ -313,6 +313,19 @@ class TailTrailsTests(TestCase):
         page = self.client.get(reverse("animal_new"))
         self.assertContains(page, "Fleas *")
         self.assertContains(page, "Heartworm status *")
+        self.assertContains(page, "Vaccination status *")
+
+    def test_blank_vaccination_status_cannot_be_saved_on_edit(self):
+        self.login(self.employee)
+        Animal.objects.filter(pk=self.available.pk).update(vaccination_status="In Progress")
+        response = self.client.post(
+            reverse("animal_edit", args=[self.available.pk]),
+            self.animal_form_data(animal_id=self.available.animal_id, vaccination_status=""),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("vaccination_status", response.context["form"].errors)
+        self.available.refresh_from_db()
+        self.assertEqual(self.available.vaccination_status, "In Progress")
 
     def test_negative_animal_quantities_cannot_be_created_or_saved(self):
         self.login(self.employee)
@@ -711,6 +724,76 @@ class TailTrailsTests(TestCase):
             self.assertEqual(logo.size, (512, 512))
         with Image.open(organization.banner.path) as banner:
             self.assertEqual(banner.size, (1920, 640))
+
+    def test_branding_ajax_save_navigates_to_clean_saved_settings(self):
+        self.login(self.admin)
+        self.client.post(reverse("branding_preview", args=["logo"]), {"action": "start"})
+        response = self.client.post(
+            reverse("organization"),
+            {
+                "name": "Saved branding",
+                "primary_color": "#245C4A",
+                "secondary_color": "#D47A45",
+                **{
+                    f"{kind}_upload": SimpleUploadedFile(
+                        f"{kind}.png", make_png((600, 300), (20, 140, 90)),
+                        content_type="image/png",
+                    )
+                    for kind in ("logo", "banner", "favicon")
+                },
+                "logo_crop": '{"x":0.25,"y":0,"width":0.5,"height":1}',
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"redirect_url": reverse("organization")})
+        self.assertNotIn("branding_image_deadline", self.client.session)
+        page = self.client.get(response.json()["redirect_url"])
+        self.assertContains(page, "Organization settings saved.")
+        self.assertContains(page, "Saved branding")
+        self.assertContains(page, "data-branding-session hidden")
+        self.assertContains(page, 'data-crop-selection hidden tabindex="0"', count=3)
+        self.assertIn("no-store", page["Cache-Control"])
+        for kind in ("logo", "banner", "favicon"):
+            preview = self.client.get(reverse("branding_preview", args=[kind]))
+            self.assertEqual(preview.status_code, 200)
+            self.assertIn("no-store", preview["Cache-Control"])
+        self.assertEqual(Organization.current().logo_crop["x"], 0.25)
+
+    def test_branding_ajax_validation_errors_do_not_redirect_or_save(self):
+        self.login(self.admin)
+        original_name = Organization.current().name
+        response = self.client.post(
+            reverse("organization"),
+            {"name": "", "primary_color": "invalid", "logo_crop": "invalid"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("redirect_url", response.json())
+        self.assertIn("name", response.json()["errors"])
+        self.assertIn("logo_crop", response.json()["errors"])
+        self.assertIn("name", response.json()["field_labels"])
+        self.assertEqual(Organization.current().name, original_name)
+
+    def test_branding_ajax_expired_image_session_rejects_save(self):
+        self.login(self.admin)
+        session = self.client.session
+        session["branding_image_deadline"] = timezone.now().timestamp() - 1
+        session.save()
+        original_name = Organization.current().name
+        response = self.client.post(
+            reverse("organization"),
+            {
+                "name": "Must not save",
+                "primary_color": "#245C4A",
+                "secondary_color": "#D47A45",
+                "logo_upload": SimpleUploadedFile("logo.png", PNG_BYTES, content_type="image/png"),
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("expired", response.json()["errors"]["__all__"][0]["message"])
+        self.assertEqual(Organization.current().name, original_name)
 
     def test_heic_branding_preview_is_server_rendered_and_admin_only(self):
         self.login(self.admin)

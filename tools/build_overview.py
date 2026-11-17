@@ -416,7 +416,7 @@ table(
         ],
         [
             "Other medical / behavior",
-            "Vaccination: Up to Date/In Progress/Unvaccinated or blank, plus notes. House trained: Yes/No/Unknown or blank. Leash skills use the same choices for Dog/Cat only.",
+            "Vaccination is required, initially blank: Up to Date/In Progress/Unvaccinated, plus optional notes. House trained: Yes/No/Unknown or blank. Leash skills use the same choices for Dog/Cat only.",
         ],
     ],
     [1.35, 5.75],
@@ -488,7 +488,7 @@ table(
     [0.85, 2.65, 3.6],
 )
 para(
-    "Branding uses the same fixed-image 3 x 3 selector without stretching non-square sources. Preview and final uploads report progress. Image changes start the same configured timer; name/color-only changes do not. Preview responses create no pending stored files. Discard releases browser selections. Saved branding changes only after Save succeeds. Favicon fallback is dedicated icon, then logo, then a color-matched heart.",
+    "Branding uses the same fixed-image 3 x 3 selector without stretching non-square sources. Preview and final uploads report progress. Image selection and deliberate crop changes start the configured timer. Page layout, resizing and name/color-only changes do not. The notice separates the countdown and a distinct discard button. Preview responses create no pending stored files. Discard releases browser selections. Successful saves navigate to freshly initialized settings; failed saves retain browser selections and crops for retry. Favicon fallback is dedicated icon, then logo, then a color-matched heart.",
     "small",
 )
 
@@ -631,11 +631,12 @@ else:
         "Run the Django suite and optional JavaScript input checks before publishing a release. Do not infer test completion from generating this document."
     )
 para(
-    "JavaScript interaction checks exercise unsigned typing/paste and precision handling. Browser, Windows and Docker/PostgreSQL runtime checks were not run in this Linux workspace. Deployment smoke tests and Windows workflow execution remain separate verification steps.",
+    "JavaScript interaction checks exercise crop readiness, silent layout, timer activation, save navigation, upload progress and retries, plus unsigned typing/paste and precision handling. Browser, Windows and Docker/PostgreSQL runtime checks were not run in this Linux workspace. Deployment smoke tests and Windows workflow execution remain separate verification steps.",
     "small",
 )
 code("""# Automated checks (Python environment + locked dependencies)
 DB_ENGINE=sqlite python manage.py test
+node tests/test_branding_ui.js
 node tests/test_unsigned_inputs.js  # Optional; requires Node.js
 
 # Maintenance

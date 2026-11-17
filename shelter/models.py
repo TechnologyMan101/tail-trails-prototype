@@ -137,8 +137,6 @@ class Animal(models.Model):
     medications = models.TextField(blank=True)
     vaccination_status = models.CharField(
         max_length=50,
-        blank=True,
-        default="",
         choices=[(s, s) for s in ("Up to Date", "In Progress", "Unvaccinated")],
     )
     vaccination_notes = models.TextField(blank=True)

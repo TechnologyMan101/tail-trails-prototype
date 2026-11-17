@@ -357,19 +357,21 @@ const createSelectionCropper = ({stage, image, selection, cropInput, ratio, maxW
     let y = Math.max(0, Math.min(stageHeight - height, candidate.y));
     return {x, y, width, height};
   };
-  const write = () => {
+  const write = (notify = false) => {
     if (!ready) return;
     crop = constrain(crop);
     Object.assign(selection.style, {
       left: `${crop.x}px`, top: `${crop.y}px`, width: `${crop.width}px`, height: `${crop.height}px`,
     });
-    cropInput.value = JSON.stringify({
+    const value = JSON.stringify({
       x: crop.x / stageWidth,
       y: crop.y / stageHeight,
       width: crop.width / stageWidth,
       height: crop.height / stageHeight,
     });
-    cropInput.dispatchEvent(new Event('cropchange', {bubbles: true}));
+    const changed = cropInput.value !== value;
+    cropInput.value = value;
+    if (notify && changed) cropInput.dispatchEvent(new Event('cropchange', {bubbles: true}));
   };
   const centered = (fill = 0.9) => {
     let width = stageWidth * fill;
@@ -402,7 +404,7 @@ const createSelectionCropper = ({stage, image, selection, cropInput, ratio, maxW
     crop = constrain({x: centerX - width / 2, y: centerY - height / 2, width, height});
   };
   const layout = (useStoredCrop = true) => {
-    if (!image.naturalWidth || !image.naturalHeight) return;
+    if (!image.naturalWidth || !image.naturalHeight) return false;
     const retained = ready ? savedCrop() : null;
     const shellWidth = Math.max(1, stage.parentElement.clientWidth);
     const availableWidth = Math.min(maxWidth, shellWidth);
@@ -424,6 +426,7 @@ const createSelectionCropper = ({stage, image, selection, cropInput, ratio, maxW
     if (useStoredCrop) fromNormalized(retained || savedCrop());
     else centered();
     write();
+    return true;
   };
   const setRatio = (nextRatio, reset = true) => {
     currentRatio = Number(nextRatio) || 1;
@@ -445,7 +448,7 @@ const createSelectionCropper = ({stage, image, selection, cropInput, ratio, maxW
     const move = (nextEvent) => {
       const point = stagePoint(nextEvent);
       crop = constrain({...original, x: original.x + point.x - start.x, y: original.y + point.y - start.y});
-      write();
+      write(true);
     };
     const end = () => {
       selection.removeEventListener('pointermove', move);
@@ -481,7 +484,7 @@ const createSelectionCropper = ({stage, image, selection, cropInput, ratio, maxW
         width,
         height,
       });
-      write();
+      write(true);
     };
     const end = () => {
       handle.removeEventListener('pointermove', resize);
@@ -497,7 +500,7 @@ const createSelectionCropper = ({stage, image, selection, cropInput, ratio, maxW
     const centerY = crop.y + crop.height / 2;
     const width = crop.width * factor;
     crop = constrain({x: centerX - width / 2, y: centerY - width / currentRatio / 2, width, height: width / currentRatio});
-    write();
+    write(true);
   };
 
   selection.addEventListener('pointerdown', beginMove);
@@ -512,7 +515,7 @@ const createSelectionCropper = ({stage, image, selection, cropInput, ratio, maxW
     else if (event.key === '-' || event.key === '_') return event.preventDefault(), resizeFromCenter(0.95);
     else return;
     event.preventDefault();
-    write();
+    write(true);
   });
   window.addEventListener('resize', () => layout(true));
   return {layout, setRatio};
@@ -523,46 +526,118 @@ if (brandingForm) {
   const csrfToken = $('[name="csrfmiddlewaretoken"]', brandingForm)?.value;
   const previewTemplate = brandingForm.dataset.previewUrlTemplate;
   let imageSession = null;
-  let startingSession = false;
+  let startingSession = null;
   let previewCount = 0;
-  const startImageSession = async () => {
-    if (imageSession || startingSession) return;
-    startingSession = true;
-    try {
-      const data = new FormData(); data.append('action', 'start');
-      const response = await fetch(previewTemplate.replace('ASSET_KIND', 'logo'), {method:'POST', headers:{'X-CSRFToken':csrfToken}, body:data});
-      if (!response.ok) throw new Error('Could not start image editing session.');
-      const result = await response.json();
-      imageSession = performance.now() + result.remaining_seconds * 1000;
-      $('[data-branding-session]', brandingForm).hidden = false;
-      const tick = () => {
-        const seconds = Math.max(0, Math.ceil((imageSession - performance.now()) / 1000));
-        $('[data-branding-countdown]', brandingForm).textContent = seconds ? `Image editing time remaining: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : 'Image editing expired. Discard changes and select your images again.';
-        if (seconds) setTimeout(tick, 250);
-      }; tick();
-    } finally { startingSession = false; }
+  let saving = false;
+  const failedPreviews = new Set();
+  const sessionStatus = $('[data-branding-session-status]', brandingForm);
+  const errorBox = $('[data-branding-errors]', brandingForm);
+  const saveStatus = $('[data-branding-save-status]', brandingForm);
+  const saveMessage = $('[data-branding-save-message]', brandingForm);
+  const saveProgress = $('[data-branding-save-progress]', brandingForm);
+  const startImageSession = () => {
+    if (imageSession) return Promise.resolve();
+    if (!startingSession) {
+      startingSession = (async () => {
+        const data = new FormData(); data.append('action', 'start');
+        const response = await fetch(previewTemplate.replace('ASSET_KIND', 'logo'), {method:'POST', headers:{'X-CSRFToken':csrfToken}, body:data});
+        if (!response.ok) throw new Error('Could not start image editing session.');
+        const result = await response.json();
+        imageSession = performance.now() + result.remaining_seconds * 1000;
+        $('[data-branding-session]', brandingForm).hidden = false;
+        const tick = () => {
+          const seconds = Math.max(0, Math.ceil((imageSession - performance.now()) / 1000));
+          const timer = $('[data-branding-countdown]', brandingForm);
+          const label = seconds ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : 'Expired';
+          if (timer.textContent !== label) timer.textContent = label;
+          if (seconds) setTimeout(tick, 250);
+          else sessionStatus.textContent = 'Image editing expired. Discard changes and select your images again.';
+        }; tick();
+      })().finally(() => { startingSession = null; });
+    }
+    return startingSession;
   };
-  $('[data-branding-discard]', brandingForm)?.addEventListener('click', async () => {
-    const data = new FormData(); data.append('action', 'discard');
-    await fetch(previewTemplate.replace('ASSET_KIND', 'logo'), {method:'POST', headers:{'X-CSRFToken':csrfToken}, body:data});
-    window.location.reload();
+  const discardButton = $('[data-branding-discard]', brandingForm);
+  discardButton?.addEventListener('click', async () => {
+    discardButton.disabled = true;
+    try {
+      const data = new FormData(); data.append('action', 'discard');
+      const response = await fetch(previewTemplate.replace('ASSET_KIND', 'logo'), {method:'POST', headers:{'X-CSRFToken':csrfToken}, body:data});
+      if (!response.ok) throw new Error('Image changes could not be discarded. Try again.');
+      window.location.reload();
+    } catch (error) {
+      sessionStatus.textContent = error.message;
+      discardButton.disabled = false;
+    }
   });
+  const showSaveErrors = (errors, labels = {}) => {
+    const heading = document.createElement('strong'); heading.textContent = 'Settings were not saved. Please correct the following:';
+    const list = document.createElement('ul');
+    for (const [name, items] of Object.entries(errors)) {
+      for (const error of items) {
+        const item = document.createElement('li');
+        item.textContent = (name === '__all__' ? '' : `${labels[name] || name}: `) + error.message;
+        list.append(item);
+      }
+    }
+    errorBox.replaceChildren(heading, list); errorBox.hidden = false;
+    errorBox.focus();
+  };
   brandingForm.addEventListener('submit', (event) => {
-    if (previewCount || startingSession || (imageSession && performance.now() >= imageSession)) {
-      event.preventDefault();
-      alert(previewCount ? 'Wait for image uploads to finish.' : 'Image editing expired. Discard changes and select your images again.');
+    event.preventDefault();
+    if (saving) return;
+    if (previewCount || startingSession || failedPreviews.size || (imageSession && performance.now() >= imageSession)) {
+      const message = previewCount || startingSession ? 'Wait for image previews to finish.' : failedPreviews.size ? 'Fix the image preview error or discard your image changes before saving.' : 'Image editing expired. Discard changes and select your images again.';
+      showSaveErrors({__all__:[{message}]});
       return;
     }
+    // Capture enabled fields/files before temporarily disabling the controls.
+    const data = new FormData(brandingForm);
+    const controls = $$('input,select,textarea,button', brandingForm).map((control) => [control, control.disabled]);
+    const restore = () => { saving = false; controls.forEach(([control, disabled]) => { control.disabled = disabled; }); };
+    saving = true; controls.forEach(([control]) => { control.disabled = true; });
+    errorBox.hidden = true;
     const hasFiles = $$('input[type=file]', brandingForm).some((input) => input.files.length);
-    if (!hasFiles) return;
-    event.preventDefault();
-    const message = document.createElement('p'); message.setAttribute('role', 'status'); message.textContent = 'Uploading settings…'; brandingForm.append(message);
+    saveStatus.hidden = false; saveProgress.hidden = !hasFiles;
+    $('label', saveStatus).hidden = !hasFiles;
+    saveProgress.value = 0;
+    saveMessage.textContent = hasFiles ? 'Uploading image changes…' : 'Saving settings…';
     const request = new XMLHttpRequest(); request.open('POST', brandingForm.action || location.href);
-    request.upload.onprogress = (progress) => { message.textContent = progress.lengthComputable ? `Saving image uploads: ${Math.round(progress.loaded / progress.total * 100)}%` : 'Saving image uploads…'; };
-    request.upload.onload = () => { message.textContent = 'Uploads complete. Saving images and settings…'; };
-    request.onload = () => { document.open(); document.write(request.responseText); document.close(); };
-    request.onerror = () => { message.textContent = 'Save failed. Check your connection and try again.'; };
-    request.send(new FormData(brandingForm));
+    request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    request.setRequestHeader('Accept', 'application/json');
+    request.upload.onprogress = (progress) => {
+      if (!hasFiles) return;
+      if (progress.lengthComputable) {
+        const percent = Math.round(progress.loaded / progress.total * 100);
+        saveProgress.value = percent; saveMessage.textContent = `Uploading image changes: ${percent}%`;
+      } else saveMessage.textContent = 'Uploading image changes…';
+    };
+    request.upload.onload = () => { saveMessage.textContent = hasFiles ? 'Uploads complete. Processing images and saving settings…' : 'Saving settings…'; };
+    request.onload = () => {
+      try {
+        const result = JSON.parse(request.responseText);
+        if (request.status >= 200 && request.status < 300 && result.redirect_url) {
+          saveMessage.textContent = 'Settings saved. Opening the saved settings…';
+          window.location.assign(result.redirect_url);
+          return;
+        }
+        if (result.errors) {
+          showSaveErrors(result.errors, result.field_labels);
+          saveMessage.textContent = 'Correct the errors above, then save again.';
+          restore();
+          return;
+        }
+        throw new Error('Unexpected save response.');
+      } catch (_) {
+        showSaveErrors({__all__:[{message:'Settings could not be saved. Reload the page and try again.'}]});
+        saveMessage.textContent = 'Save failed.'; restore();
+      }
+    };
+    request.onerror = request.onabort = () => {
+      showSaveErrors({__all__:[{message:'Save failed. Check your connection and try again.'}]});
+      saveMessage.textContent = 'Save failed.'; restore();
+    };
+    try { request.send(data); } catch (_) { request.onerror(); }
   });
 
   $$('[data-live-name]', brandingForm).forEach((node) => {
@@ -590,7 +665,6 @@ if (brandingForm) {
     const fileInput = $(`[name="${kind}_upload"]`, cropper);
     const cropInput = $(`[name="${kind}_crop"]`, cropper);
     let objectUrl = null;
-    let initializing = true;
     const controller = createSelectionCropper({
       stage,
       image,
@@ -601,26 +675,24 @@ if (brandingForm) {
       maxHeight: kind === 'banner' ? 520 : 520,
     });
     const imageReady = (useStoredCrop = false) => {
-      image.hidden = false;
+      if (!controller.layout(useStoredCrop)) return;
       placeholder.hidden = true;
-      controller.layout(useStoredCrop);
-      initializing = false;
     };
     if (image.src) {
-      if (image.complete) imageReady(true);
+      if (image.complete && image.naturalWidth) imageReady(true);
       else image.addEventListener('load', () => imageReady(true), {once: true});
     } else selection.hidden = true;
-    cropInput.addEventListener('cropchange', () => { if (!initializing) startImageSession().catch((error) => { status.textContent = error.message; }); });
+    cropInput.addEventListener('cropchange', () => { startImageSession().catch((error) => { status.textContent = error.message; }); });
 
     fileInput?.addEventListener('change', async () => {
       const file = fileInput.files?.[0];
-      if (!file) return;
-      await startImageSession();
+      if (!file) { failedPreviews.delete(kind); return; }
       status.textContent = 'Preparing crop preview…';
       previewCount += 1;
       const formData = new FormData();
       formData.append('image', file);
       try {
+        await startImageSession();
         const blob = await new Promise((resolve, reject) => {
           const request = new XMLHttpRequest();
           request.open('POST', previewTemplate.replace('ASSET_KIND', kind));
@@ -636,16 +708,22 @@ if (brandingForm) {
         });
         if (objectUrl) URL.revokeObjectURL(objectUrl);
         objectUrl = URL.createObjectURL(blob);
-        image.onload = () => {
-          imageReady(false);
-          status.textContent = 'Move or resize the 3×3 selection. The image remains fixed.';
-          if (kind === 'banner') $('[data-live-banner]', brandingForm)?.style.setProperty('background-image', `linear-gradient(#173d32b8,#173d32b8),url("${objectUrl}")`);
-          if (kind === 'logo') $('[data-live-logo]', brandingForm)?.setAttribute('src', objectUrl);
-          if (kind === 'favicon') $('[data-live-favicon]', brandingForm)?.setAttribute('src', objectUrl);
-        };
-        image.src = objectUrl;
+        await new Promise((resolve, reject) => {
+          image.onload = () => {
+            imageReady(false);
+            status.textContent = 'Move or resize the 3×3 selection. The image remains fixed.';
+            if (kind === 'banner') $('[data-live-banner]', brandingForm)?.style.setProperty('background-image', `linear-gradient(#173d32b8,#173d32b8),url("${objectUrl}")`);
+            if (kind === 'logo') $('[data-live-logo]', brandingForm)?.setAttribute('src', objectUrl);
+            if (kind === 'favicon') $('[data-live-favicon]', brandingForm)?.setAttribute('src', objectUrl);
+            resolve();
+          };
+          image.onerror = () => reject(new Error('The image preview could not be loaded. Select the image again.'));
+          image.src = objectUrl;
+        });
+        failedPreviews.delete(kind);
       } catch (error) {
         status.textContent = error.message;
+        failedPreviews.add(kind);
       } finally { previewCount -= 1; }
     });
   });
