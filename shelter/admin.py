@@ -21,6 +21,7 @@ class PhotoInline(admin.TabularInline):
         return format_html('<a href="{}">Download original</a>', reverse("original_photo", args=["animal", obj.pk]))
 @admin.register(Animal)
 class AnimalAdmin(admin.ModelAdmin):
+    def has_delete_permission(self, request, obj=None): return False
     exclude = ("spay_notes", "energy_level", "flea_prevention", "found_by")
     list_display = ("animal_id", "name", "species", "status", "is_archived", "held_at")
     search_fields = ("animal_id", "name", "breed")

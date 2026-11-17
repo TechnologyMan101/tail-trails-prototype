@@ -206,7 +206,53 @@ Employees and administrators select **Deceased** in the animal's status dropdown
 
 Migration 0009 converts existing Euthanized records to Deceased without losing their confirmation timestamps or users. Those legacy records receive the reason "Previously recorded as euthanized." New confirmations require a reason supplied by staff. New-profile creation supports records with or without photos; photo uploads continue into the crop workflow after the record saves. Invalid forms display a prominent linked error summary and retain entered values, so validation failures cannot look like a successful save.
 
-Archiving is separate and reversible: toggle **Is archived** on the edit page and save. Archived animals disappear from normal searches, homepage features, and public profiles even if their adoption status is Available. Employees and administrators can tick **Include archived records** in animal search, open an archived record, and restore it by clearing the archive checkbox. Sorting preserves the archive filter. Volunteers cannot browse archived profiles or start new submissions for them; existing submission history remains available for review and audit. Restoring an archive never reverses a confirmed deceased status. Records created before archiving was introduced default to unarchived; existing confirmations are preserved.
+Archiving is separate and reversible: toggle **Archive this record** on the edit page and save. Archived animals disappear from normal searches, homepage features, and public profiles even if their adoption status is Available. Employees and administrators can tick **Include archived records** in animal search, open an archived record, and restore it by clearing the archive checkbox. Sorting preserves the archive filter. Volunteers cannot browse archived profiles or start new submissions for them; existing submission history remains available for review and audit. Restoring an archive never reverses a confirmed deceased status. Records created before archiving was introduced default to unarchived; existing confirmations are preserved.
+
+## Detailed activity log and retention
+
+Administrators can open **Administration → Activity log**. Employees and Administrators keep the existing concise **Change history** inside each animal profile; only Administrators see its link to the detailed log with that animal preselected. Volunteers do not gain access to staff history or administrative logs.
+
+The detailed log records account changes, sign-in/sign-out and denied-access events, animal edits/archive/deceased confirmations/deletions, photo changes and original downloads, submission review changes, branding updates, volunteer activities and manual adjustments, and upload-batch lifecycle events. Each event includes a timestamp, actor name/role/ID snapshot, action, outcome, record identity, related animal ID where applicable, and a request ID for grouping events from one request. Expand Details to inspect changed fields. Basic non-sensitive fields include before/after values; private notes, medical details, contacts, file paths and credentials have their values redacted. Passwords, password hashes, request bodies and uploaded bytes are never persisted in audit events.
+
+Filter by actor, action, record, animal name/reference, category, outcome and date range. Results are paginated at 50 events. The filtered CSV export is capped at 10,000 events; narrow the filters for larger result sets. Exports are themselves logged. Actor and record snapshots survive deletion of their source records. The UI offers no edit/delete controls for audit events; this is application-level protection, not tamper-proof storage against database operators. Detailed logging begins with this build: older concise history is preserved without inventing historical field values.
+
+The following section of `.env.example` controls automatic retention. Values must be positive whole numbers:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AUDIT_RETENTION_ROUTINE_DAYS` | `365` | Ordinary record, photo, submission, branding and activity changes |
+| `AUDIT_RETENTION_CRITICAL_DAYS` | `1095` | Role/security/adjustment changes, archives, permanent confirmations, animal deletions, exports and cleanup summaries |
+| `AUDIT_RETENTION_ACCESS_DAYS` | `90` | Authentication, denied access, failed password confirmations and original downloads |
+| `AUDIT_RETENTION_OPERATIONAL_DAYS` | `30` | Pending-upload lifecycle and file-cleanup failures |
+| `AUDIT_CLEANUP_INTERVAL_MINUTES` | `1440` | Detailed-log cleanup interval, independently of photo-batch cleanup |
+
+The existing cleanup service checks when audit pruning is due; application startup also checks it. Each run deletes expired detailed events in batches and retains a critical summary with counts and cutoffs. The Activity log displays the configured policy and latest cleanup time. Changing `.env` requires recreating both services:
+
+```bash
+docker compose up -d --force-recreate app cleanup
+```
+
+For immediate pruning with the configured policy:
+
+```bash
+docker compose exec app python manage.py cleanup_audit_events
+```
+
+Retention does not prune concise animal history or alter permanent confirmation details. Those stay with their animal record until that record is deliberately deleted. Database backups and exported CSV files have separate lifecycles; pruning the live log does not remove copies from backups or exports. Migration `0013_auditevent` adds the log table without rewriting animal records or volunteer entries.
+
+## Volunteer totals and activity corrections
+
+**Displayed Total Hours = sum of recorded activity hours + manual adjustment.** Administrators use **Manage users → Edit → Total Hours** to replace a Volunteer account's total. The adjustment becomes the entered total minus the recorded sum. This never edits or deletes activity entries. For example, an activity sum of 8 hours with an entered total of 20 stores a +12 adjustment. Editing an activity from 5 to 7 hours then raises the displayed total to 22 while keeping the +12 adjustment.
+
+Employees and Administrators can add, edit or delete individual activities from **Volunteer hours**. Deletion opens a separate acknowledgement page. These operations change only the recorded sum and preserve the adjustment. As a result, deleting activities after a downward total adjustment can produce a negative calculated total; no hidden clamping or adjustment rewrite occurs.
+
+When a Volunteer becomes an Employee or Administrator, all historical activity entries and the manual adjustment remain stored. Volunteer Hours disappear from that account's displays and from the volunteer-management list. Restoring the Volunteer role makes the preserved total visible again. The Total Hours replacement control is available only for a Volunteer account. Activity corrections and administrator adjustments are captured in the detailed log.
+
+## Permanent animal deletion
+
+Only Administrators see **Delete animal record…** beside the animal editor's Cancel/Save controls. It opens a separate confirmation page requiring an explicit acknowledgement checkbox and the signed-in administrator's current password. A GET, missing acknowledgement or incorrect password cannot delete a record. The Django administration backend disables its direct deletion shortcut so it cannot bypass this workflow.
+
+Successful deletion removes the animal, concise history, related submissions, photo associations and pending crop batches in one database transaction. Unshared image files are removed after commit; files still referenced by another record are preserved. Detailed administrative events retain actor and animal snapshots under the configured retention policy. Confirmed Deceased records can also be deliberately deleted by this administrator-only workflow; the permanence rule prevents changing their status back, rather than forbidding record deletion. Use Archive when the record should be retained.
 
 ## Structured animal intake and care fields
 
@@ -222,7 +268,7 @@ The status and archive controls share a stable row; the conditional Deceased con
 | Spay/neuter: Nursing | Show and require both litter size and litter date of birth. |
 | Species: Dog or Cat | Show optional leash skills. Hide and disable it for other species. |
 
-Intake options are Stray, Owner Surrender, Animal Control, Transfer, Seizure and Other. Age units are Weeks, Months and Years; age sorting compares normalized durations. Spay/neuter choices are Spayed/Neutered, Not Spayed/Neutered, Unknown and Nursing. Vaccination status offers Up to Date, In Progress and Unvaccinated, with optional notes and a blank initial choice. Heartworm offers Positive, Negative and Unknown, initially blank; fleas offers Positive and Negative, initially blank. House trained and leash skills offer Yes, No and Unknown, initially blank. Coat length is Short, Medium or Long, initially blank. Weight is in kg to three decimal places (grams), and height in cm to one decimal place (millimeters).
+Intake options are Stray, Owner Surrender, Animal Control, Transfer, Seizure and Other. Age units are Weeks, Months and Years; age sorting compares normalized durations. Spay/neuter choices are Spayed/Neutered, Not Spayed/Neutered, Nursing and Unknown. Vaccination status offers Up to Date, In Progress and Unvaccinated, with optional notes and a blank initial choice. Heartworm offers Positive, Negative and Unknown, initially blank; fleas offers Positive and Negative, initially blank. House trained and leash skills offer Yes, No and Unknown, initially blank. Coat length is Short, Medium or Long, initially blank. Weight is in kg to three decimal places (grams), and height in cm to one decimal place (millimeters).
 
 Breed and coat-pattern suggestions appear immediately with a live matching/total count. Search filters the chips. When no suggestion matches, an explicit empty-state message and an **Add** button let staff select their typed custom value. Multiple values can be selected and removed. Breed pools contain 30 suggestions per species for dogs and cats; rabbit/other breeds can be entered directly. These are practical intake suggestions, not an authoritative population ranking or breed identification. Reference pools: [AKC popular breeds](https://www.akc.org/most-popular-breeds/) and [CFA popular pedigreed breeds](https://cfa.org/cat-talk/most-popular-breeds-for-2024/), supplemented with domestic coat-length types and mixed breeds. Coat-color checkboxes are Black, White, Blue/Gray, Red/Orange, Tan, Cream, Brown and Silver. Multiple colors can be searched individually; no selection means not recorded, without Unknown or Other checkboxes.
 
@@ -251,7 +297,7 @@ Run the automated tests:
 DB_ENGINE=sqlite python manage.py test
 ```
 
-The tests cover public visibility, role boundaries, gallery rendering, two-stage multi-image cropping, fixed-image 3×3 crop selectors, exact-ratio output, resumable deadlines, cancellation, expired-file cleanup, volunteer approval, branding crops and retained originals, HEIC previews, color controls, upload retries, CPU/swap diagnostics, the administrator SSE stream, ASGI configuration, dependency policy, loopback-only port publishing, reverse-proxy examples and prefixes, and health checks.
+The tests cover public visibility, role boundaries, gallery rendering, two-stage multi-image cropping, fixed-image 3×3 crop selectors, exact-ratio output, resumable deadlines, cancellation, expired-file cleanup, volunteer approval, branding crops and retained originals, HEIC previews, color controls, upload retries, CPU/swap diagnostics, the administrator SSE stream, ASGI configuration, dependency policy, loopback-only port publishing, reverse-proxy examples and prefixes, and health checks. Additional tests cover audit permissions/redaction/filtering/export/retention, replacement hour totals and role restoration, activity edits/deletions, and password-confirmed animal deletion with post-commit file cleanup.
 
 ## Dependency update policy
 

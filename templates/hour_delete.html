@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">Volunteer activity</span><h1>Delete activity?</h1><p>{{ entry.user.full_name }} · {{ entry.activity_date }} · {{ entry.hours }} hours · {{ entry.activity_type }}</p></div></div>
+<section class="panel"><p>Only this activity is removed. The manual adjustment is preserved; the displayed total decreases by this activity's hours.</p>
+{% if needs_confirmation %}<p class="field-error" role="alert">Confirm deletion to continue.</p>{% endif %}
+<form method="post" class="confirmation-form">{% csrf_token %}<label class="confirmation-check"><input type="checkbox" name="confirm" required> Delete this activity entry.</label><div class="form-footer"><a class="button ghost" href="{% url 'volunteer_hours' %}?user_id={{ entry.user_id }}">Cancel</a><button class="button danger">Delete activity</button></div></form></section>
+{% endblock %}

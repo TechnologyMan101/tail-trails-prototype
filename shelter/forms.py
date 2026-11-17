@@ -86,6 +86,9 @@ class AnimalForm(forms.ModelForm):
                 self.add_error("deceased_confirm", "Confirm that you understand this status is permanent.")
             if not self.user or not self.user.check_password(cleaned.get("deceased_password", "")):
                 self.add_error("deceased_password", "Enter your correct current password.")
+                if self.user:
+                    from .audit import record
+                    record('access', 'deceased.confirmation_failed', actor=self.user, outcome='failure', target=self.instance if self.instance.pk else None)
         return cleaned
 
     class Meta:
@@ -198,7 +201,12 @@ class OrganizationForm(forms.ModelForm):
 
 class UserManageForm(forms.ModelForm):
     password = forms.CharField(widget=forms.PasswordInput, required=False)
-    total_volunteer_hours = forms.DecimalField(min_value=0, required=False)
+    total_volunteer_hours = forms.DecimalField(label="Total Hours", min_value=0, max_digits=8, decimal_places=2, required=False, help_text="Replaces the displayed total. Recorded activities are preserved; the difference is stored as a manual adjustment.")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk: self.initial['total_volunteer_hours'] = self.instance.total_hours
+        role = self.data.get('role') if self.is_bound else self.instance.role
+        self.fields['total_volunteer_hours'].disabled = role != 'Volunteer'
     class Meta: model = User; fields = ("full_name", "email", "phone", "role", "is_active")
     def clean_password(self):
         password = self.cleaned_data.get("password")

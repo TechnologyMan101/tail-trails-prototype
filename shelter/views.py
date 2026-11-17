@@ -26,6 +26,9 @@ from .diagnostics import system_snapshot
 from .models import Animal, AnimalHistory, AnimalPhoto, Organization, PhotoUploadBatch, Submission, SubmissionPhoto, User, VolunteerHour
 from .images import delete_photo_files
 from .photo_batches import cancel_photo_batch, create_photo_batch, finalize_photo_batch, parse_crop_payload
+from .audit import record
+from .confirmation import AnimalDeleteForm
+from .models import PendingPhoto, AuditEvent
 
 
 def roles(*allowed):
@@ -56,7 +59,10 @@ def original_photo(request, kind, pk):
     else: raise Http404
     if not photo.original_image: raise Http404
     filename = photo.original_filename or Path(photo.original_image.name).name
-    return FileResponse(photo.original_image.open("rb"), as_attachment=True, filename=filename)
+    try: response = FileResponse(photo.original_image.open("rb"), as_attachment=True, filename=filename)
+    except OSError: raise Http404
+    record('access', 'photo.original_download', target=photo, animal_id=photo.animal_id if kind == 'animal' else photo.submission.animal_id)
+    return response
 
 def sign_in(request):
     if request.user.is_authenticated: return redirect("animals")
@@ -153,6 +159,8 @@ def animal_edit(request, pk=None):
                             photos.sort(key=lambda photo: photo.pk != chosen_id)
                         for position, photo in enumerate(photos): photo.position = position
                         AnimalPhoto.objects.bulk_update(photos, ["position"])
+                        if primary_photo_id:
+                            record('routine', 'animal.cover_selected', target=obj, animal_id=obj.pk, changes={'photo_order':[photo.pk for photo in photos]})
                     summary = "Animal profile updated" if animal else "Animal profile created"
                     if confirming_deceased: summary += "; Deceased status permanently confirmed with password verification"
                     if animal and locked.is_archived != obj.is_archived: summary += "; record archived" if obj.is_archived else "; record restored from archive"
@@ -178,6 +186,48 @@ def animal_edit(request, pk=None):
 def animal_euthanize(request, pk):
     get_object_or_404(Animal, pk=pk)
     return redirect("animal_edit", pk=pk)
+
+
+def _remove_orphan_files(files):
+    from django.core.files.storage import default_storage
+    for name in files:
+        if AnimalPhoto.objects.filter(Q(image=name) | Q(original_image=name)).exists(): continue
+        if SubmissionPhoto.objects.filter(Q(image=name) | Q(original_image=name)).exists(): continue
+        if PendingPhoto.objects.filter(original=name).exists(): continue
+        try: default_storage.delete(name)
+        except OSError:
+            record('operational', 'storage.cleanup_failed', outcome='failure')
+
+
+@roles('Administrator')
+def animal_delete(request, pk):
+    animal = get_object_or_404(Animal, pk=pk)
+    form = AnimalDeleteForm(request.POST or None, user=request.user, animal=animal)
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            animal = Animal.objects.select_for_update().get(pk=pk)
+            files = set()
+            for model, query in ((AnimalPhoto, {'animal':animal}), (SubmissionPhoto, {'submission__animal':animal})):
+                for photo in model.objects.filter(**query):
+                    files.update(field.name for field in (photo.image, photo.original_image) if field)
+            files.update(PendingPhoto.objects.filter(batch__animal=animal).values_list('original', flat=True))
+            animal.delete()
+            transaction.on_commit(lambda: _remove_orphan_files(files))
+        messages.success(request, 'Animal record permanently deleted. An administrative audit event was retained.')
+        return redirect('animals')
+    return render(request, 'animal_delete.html', {'animal':animal, 'form':form})
+
+
+@roles('Administrator', 'Employee')
+def hour_delete(request, pk):
+    entry = get_object_or_404(VolunteerHour.objects.select_related('user'), pk=pk, user__role='Volunteer')
+    if request.method == 'POST' and request.POST.get('confirm') == 'on':
+        with transaction.atomic():
+            user = get_object_or_404(User.objects.select_for_update(), pk=entry.user_id, role='Volunteer')
+            get_object_or_404(VolunteerHour, pk=pk, user=user).delete()
+        messages.success(request, 'Activity deleted. The manual adjustment was preserved.')
+        return redirect(f"{reverse('volunteer_hours')}?user_id={user.pk}")
+    return render(request, 'hour_delete.html', {'entry':entry, 'needs_confirmation':request.method=='POST'})
 
 
 @roles("Volunteer")
@@ -301,22 +351,30 @@ def review_submission(request, pk, action):
             from django.http import Http404
             raise Http404
         submission.reviewed_by = request.user; submission.reviewed_at = timezone.now(); submission.save()
+        AnimalHistory.objects.create(animal=animal, user=request.user, summary=f'Volunteer submission {submission.pk} {submission.status.lower()}')
     messages.success(request, f"Submission {submission.status.lower()}."); return redirect(f"{reverse('submissions')}?status={submission.status}")
 
 @roles("Administrator", "Employee")
+@transaction.atomic
 def volunteer_hours(request):
     volunteers = User.objects.filter(role="Volunteer").order_by("full_name")
-    selected = get_object_or_404(volunteers, pk=request.POST.get("user_id") or request.GET.get("user_id") or volunteers.values_list("pk", flat=True).first()) if volunteers.exists() else None
+    selected_id = request.POST.get("user_id") or request.GET.get("user_id") or volunteers.values_list("pk", flat=True).first()
+    selected = get_object_or_404(volunteers, pk=selected_id) if selected_id else None
     if request.method == "POST" and selected:
+        selected = get_object_or_404(User.objects.select_for_update(), pk=selected.pk, role='Volunteer')
         entry = get_object_or_404(VolunteerHour, pk=request.POST.get("hour_id"), user=selected) if request.POST.get("hour_id") else VolunteerHour(user=selected)
         form = VolunteerHourForm(request.POST, instance=entry)
-        if form.is_valid(): form.save(); messages.success(request, "Volunteer hours saved."); return redirect(f"/hours?user_id={selected.pk}")
-    else: form = VolunteerHourForm()
-    return render(request, "hours.html", {"volunteers": volunteers, "selected": selected, "entries": selected.hour_entries.all() if selected else [], "form": form})
+        if form.is_valid(): form.save(); messages.success(request, "Volunteer hours saved."); return redirect(f"{reverse('volunteer_hours')}?user_id={selected.pk}")
+    else:
+        entry = get_object_or_404(VolunteerHour, pk=request.GET.get('edit'), user=selected) if selected and request.GET.get('edit') else None
+        form = VolunteerHourForm(instance=entry)
+    return render(request, "hours.html", {"volunteers": volunteers, "selected": selected, "entries": selected.hour_entries.all() if selected else [], "form": form, "editing_entry": entry if selected else None})
 
 @roles("Administrator")
+@transaction.atomic
 def manage_users(request):
-    instance = get_object_or_404(User, pk=request.POST.get("id")) if request.method == "POST" and request.POST.get("id") else None
+    selected_id = request.POST.get('id') if request.method == 'POST' else request.GET.get('edit')
+    instance = get_object_or_404(User.objects.select_for_update(), pk=selected_id) if selected_id else None
     form = UserManageForm(request.POST or None, instance=instance)
     if request.method == "POST" and form.is_valid():
         user = form.save(commit=False); user.username = user.email.lower()
@@ -326,7 +384,7 @@ def manage_users(request):
             recorded = user.hour_entries.aggregate(total=Sum("hours"))["total"] or 0
             user.manual_adjustment = form.cleaned_data["total_volunteer_hours"] - recorded; user.save(update_fields=["manual_adjustment"])
         messages.success(request, "User account saved."); return redirect("users")
-    return render(request, "users.html", {"users": User.objects.all().order_by("full_name"), "form": form})
+    return render(request, "users.html", {"users": User.objects.all().order_by("full_name"), "form": form, "editing_user": instance})
 
 @require_POST
 @roles("Administrator")

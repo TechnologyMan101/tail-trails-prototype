@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><span class="eyebrow">Administration · permanent deletion</span><h1>Delete {{ animal.name }}?</h1><p>{{ animal.animal_id }}</p></div></div>
+<section class="panel"><p>This permanently deletes the animal profile, its concise history, related submissions, pending uploads and photo associations. Unshared image files are removed after deletion succeeds. Detailed administrative audit events remain until their retention deadlines. Use Archive instead if this record should be kept.</p>
+<form method="post" class="confirmation-form">{% csrf_token %}{{ form.non_field_errors }}
+<label class="confirmation-check">{{ form.confirm }}<span>{{ form.confirm.label }}</span></label>{{ form.confirm.errors }}
+<label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>{{ form.password }}{{ form.password.errors }}
+<div class="form-footer"><a class="button ghost" href="{% url 'animal_edit' animal.pk %}">Cancel</a><button type="submit" class="button danger">Permanently delete animal</button></div>
+</form></section>{% endblock %}

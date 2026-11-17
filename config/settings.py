@@ -20,6 +20,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "shelter.audit.AuditContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -103,4 +104,6 @@ BRANDING_WEB_QUALITY = int(os.getenv("BRANDING_WEB_QUALITY", "85"))
 BRANDING_MAX_SIZE_MB = int(os.getenv("BRANDING_MAX_SIZE_MB", "25"))
 PHOTO_BATCH_TTL_MINUTES = int(os.getenv("PHOTO_BATCH_TTL_MINUTES", "30"))
 PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES = int(os.getenv("PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES", "60"))
+AUDIT_RETENTION_DAYS = {category: max(1, int(os.getenv(f"AUDIT_RETENTION_{category.upper()}_DAYS", str(days)))) for category, days in {"routine":365, "critical":1095, "access":90, "operational":30}.items()}
+AUDIT_CLEANUP_INTERVAL_MINUTES = max(1, int(os.getenv("AUDIT_CLEANUP_INTERVAL_MINUTES", "1440")))
 

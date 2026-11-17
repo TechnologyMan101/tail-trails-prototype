@@ -1,6 +1,15 @@
 const $ = (selector, context = document) => context.querySelector(selector);
 const $$ = (selector, context = document) => [...context.querySelectorAll(selector)];
 
+const userEditor = $('[data-user-editor]');
+if (userEditor) {
+  const role = $('[name="role"]', userEditor);
+  const total = $('[name="total_volunteer_hours"]', userEditor);
+  const syncHoursVisibility = () => { if (total) { total.disabled = role.value !== 'Volunteer'; total.closest('p').hidden = total.disabled; } };
+  role.addEventListener('change', syncHoursVisibility);
+  syncHoursVisibility();
+}
+
 // Preserve the photo slot and its caption when a stored or remote image is missing.
 const photoImageSelector = '.submission-photo img,.photo-manager-card>img,.animal-photo img,.gallery-main img,.gallery-thumb img,.gallery-lightbox img,.summary-card>img';
 const showUnavailablePhoto = (photo) => {

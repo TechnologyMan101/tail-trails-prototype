@@ -13,7 +13,7 @@
   {% for field in form %}{% if field.name == 'has_microchip' %}<section class="field-row wide microchip-group"><div><label class="confirmation-check" for="{{ field.id_for_label }}">{{ field }} {{ field.label }}</label>{{ field.errors }}</div><div class="microchip-id-box" data-animal-field="microchip"><label for="{{ form.microchip.id_for_label }}">Microchip ID</label>{{ form.microchip }}{{ form.microchip.errors }}</div></section>{% elif field.name != 'microchip' and field.name != 'photos' and field.name != 'status' and field.name != 'is_archived' and field.name != 'deceased_reason' and field.name != 'deceased_confirm' and field.name != 'deceased_password' %}<div class="field-row" data-animal-field="{{ field.name }}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} *{% endif %}</label>{{ field }}{% for error in field.errors %}<small class="field-error">{{ error }}</small>{% endfor %}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endif %}{% endfor %}
   <section class="record-status-row wide" aria-label="Record status and archiving">
     <div class="field-row"><label for="{{ form.status.id_for_label }}">Status *</label>{{ form.status }}{{ form.status.errors }}{% if form.status.help_text %}<small>{{ form.status.help_text }}</small>{% endif %}</div>
-    <div class="field-row"><label for="{{ form.is_archived.id_for_label }}">Archived record</label>{{ form.is_archived }}<small>{{ form.is_archived.help_text }}</small>{{ form.is_archived.errors }}</div>
+    <div class="field-row"><label class="archive-choice" for="{{ form.is_archived.id_for_label }}">{{ form.is_archived }}<span>Archive this record</span></label><small>{{ form.is_archived.help_text }}</small>{{ form.is_archived.errors }}</div>
   </section>
   {% if animal.status != 'Deceased' %}<section class="form-section wide" data-deceased-confirmation>
     <h2>Confirm deceased status</h2><p>Selecting Deceased requires a reason, explicit confirmation, and your current password. This status and its confirmation details cannot be reversed.</p>
@@ -58,6 +58,6 @@
     {% endif %}
   </section>
 
-  <div class="form-footer wide"><a class="button ghost" href="{% if animal %}{% url 'animal_profile' animal.pk %}{% else %}{% url 'animals' %}{% endif %}">Cancel</a><button class="button primary">Save animal profile</button></div>
+  <div class="form-footer wide">{% if animal %}{% if user.role == 'Administrator' or user.is_superuser %}<a class="button danger delete-record-link" href="{% url 'animal_delete' animal.pk %}">Delete animal record…</a>{% endif %}{% endif %}<a class="button ghost" href="{% if animal %}{% url 'animal_profile' animal.pk %}{% else %}{% url 'animals' %}{% endif %}">Cancel</a><button class="button primary">Save animal profile</button></div>
 </form>
 {% endblock %}

@@ -255,4 +255,24 @@ class VolunteerHour(models.Model):
     activity_type = models.CharField(max_length=60)
     notes = models.CharField(max_length=250, blank=True)
     class Meta: ordering = ["-activity_date", "-id"]
+    def __str__(self): return f'{self.user.full_name}: {self.activity_type} ({self.activity_date})'
+
+
+class AuditEvent(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    category = models.CharField(max_length=20, db_index=True)
+    action = models.CharField(max_length=100, db_index=True)
+    outcome = models.CharField(max_length=10, default="success")
+    actor_id_snapshot = models.PositiveBigIntegerField(null=True, blank=True)
+    actor_name = models.CharField(max_length=160, default="System")
+    actor_role = models.CharField(max_length=30, blank=True)
+    target_type = models.CharField(max_length=50, blank=True)
+    target_id = models.CharField(max_length=80, blank=True)
+    target_label = models.CharField(max_length=200, blank=True)
+    animal_id_snapshot = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
+    request_id = models.CharField(max_length=36, blank=True)
+    changes = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
 
