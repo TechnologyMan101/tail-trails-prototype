@@ -250,14 +250,14 @@ para(f"BUILD {VERSION}", "h2")
 para(
     "Prepared for maintainers, reviewers and deployment owners. This document describes the packaged implementation and its current project scope."
 )
-head("Changes in this build")
+head("Prototype capabilities")
 bullets(
     [
-        "Fresh-install-only baseline with one initial Django schema and no historical upgrade chain.",
-        "Retired animal columns, obsolete status URLs, unused crop/dialog code and blurred-letterbox conversion are removed.",
-        "The single active photo pipeline crops every uploaded image while retaining its original. Current-format demo data needs no historical conversions.",
-        "Startup refuses earlier/untracked schemas without modifying data. Restarts keep this baseline's records without recreating deliberately deleted demo animals.",
-        "README, Git workflow and CONTRIBUTING.md describe the clean installation and collaboration base.",
+        "Structured animal intake, searchable public profiles and role-based access for staff and volunteers.",
+        "Ordered photo galleries with interactive cropping, optimized JPGs and protected original-file downloads.",
+        "Volunteer observations and photo candidates enter a staff review queue; approval rechecks official gallery capacity.",
+        "Volunteer activity management, administrator total-hour corrections, organization branding and read-only system information.",
+        "Docker Compose deployment with folder-based persistence and Git workflows for Linux, macOS and Windows PowerShell.",
     ]
 )
 para(
@@ -341,8 +341,8 @@ code("""tail-trails/
     images.py             Animal originals and web-JPG generation
     branding_images.py    Branding previews, crops and variants
     diagnostics.py        Read-only system snapshots
-    migrations/           One initial fresh-install schema
-    management/commands/  Initialization, demo seed and pending cleanup
+    migrations/           Initial Django database schema
+    management/commands/  Demo seed and pending cleanup
   templates/              Server-rendered pages
   static/                 CSS, JavaScript and fallback favicon
   tests/                  Django and optional JavaScript checks
@@ -536,7 +536,7 @@ table(
         ["Service", "Responsibility", "Persistence / exposure"],
         [
             "app",
-            "Django/Uvicorn, guarded initialization, seed and health endpoint",
+            "Django/Uvicorn, database initialization, seed and health endpoint",
             "./uploads bind mount; loopback-only host port",
         ],
         [
@@ -600,19 +600,18 @@ docker compose up --build -d
 curl http://127.0.0.1:8000/healthz""")
 
 # 8
-page("7. Fresh installation and operations")
-head("Fresh-install baseline")
+page("7. Installation and operations")
+head("Installation and startup")
 para(
-    "Use a new installation directory and empty database/upload folders. This build cannot upgrade or import an earlier prototype database.",
+    "Extract the tail-trails folder, configure .env and start the application with Docker Compose. PostgreSQL and uploaded assets persist in folders beside the Compose file.",
     "note",
 )
 bullets(
     [
-        "The single 0001_fresh_baseline Django migration creates current models and deceased-status protection directly. No previous schema transformations, retired columns or experimental log tables remain.",
-        "initialize_database checks for an empty database or this baseline's matching schema. Earlier/untracked schemas are refused before modification; it does not erase data or fake migrations.",
-        "For a previous deployment, back up and stop its services, preserve its original folders separately, and start this build from a newly extracted directory with its own data folders.",
-        "Do not copy old database/upload folders or restore an old SQL dump into this baseline. README.md describes setup and returning to the earlier installation if needed.",
-        "Restarting this same baseline reuses its data. Validated demo seeding skips populated databases, so deletions and staff edits stay in place.",
+        "Startup runs Django migrate --noinput, pending-upload cleanup and demo seeding before starting Uvicorn.",
+        "The initial 0001_initial schema creates application tables and permanent deceased-status safeguards. Database initialization is repeatable on application restarts.",
+        "Demo seeding validates required animal fields and runs when there are no accounts or animals. Records and uploads remain available across restarts.",
+        "README.md documents deployment and configuration. GIT_WORKFLOW.md provides Linux/macOS shell and Windows PowerShell commands for repositories, ZIP imports, tags and deployment.",
     ]
 )
 head("System information")
@@ -625,14 +624,14 @@ para(
 head("Release verification")
 if args.verified_tests is not None:
     para(
-        f"{args.verified_tests} Django tests passed on Python {PYTHON} with SQLite for this release. Coverage includes required medical selections, rejection of negative quantities, fresh-install/refusal/restart behavior, schema cleanup, permanent status, permissions, image processing, approval capacity, hours and deployment configuration."
+        f"{args.verified_tests} Django tests passed on Python {PYTHON} with SQLite for this release. Coverage includes required medical selections, rejection of negative quantities, database installation and restart behavior, permanent status, permissions, image processing, approval capacity, hours and deployment configuration."
     )
 else:
     para(
         "Run the Django suite and optional JavaScript input checks before publishing a release. Do not infer test completion from generating this document."
     )
 para(
-    "JavaScript interaction checks exercise unsigned typing/paste and precision handling. Full browser checks could not run because this workspace prevented Chromium from launching. Docker/PostgreSQL runtime checks are also unavailable; SQLite tests do not substitute for a deployment smoke test.",
+    "JavaScript interaction checks exercise unsigned typing/paste and precision handling. Browser, Windows and Docker/PostgreSQL runtime checks were not run in this Linux workspace. Deployment smoke tests and Windows workflow execution remain separate verification steps.",
     "small",
 )
 code("""# Automated checks (Python environment + locked dependencies)

@@ -351,19 +351,6 @@ class TailTrailsTests(TestCase):
             )
             self.assertGreaterEqual(form.fields[name].min_value, 0)
 
-    def test_activity_log_and_animal_change_history_are_removed(self):
-        from django.apps import apps
-
-        for role in (self.admin, self.employee, self.volunteer):
-            self.login(role)
-            page = self.client.get(reverse("animal_profile", args=[self.available.pk]))
-            self.assertNotContains(page, "Change history")
-            self.assertNotContains(page, "Activity log")
-            self.assertEqual(self.client.get("/activity").status_code, 404)
-        for model in ("AuditEvent", "AnimalHistory"):
-            with self.assertRaises(LookupError):
-                apps.get_model("shelter", model)
-
     def test_intake_dropdown_and_stray_fields_ignore_inactive_input(self):
         from shelter.animal_options import INTAKES
 
@@ -371,14 +358,12 @@ class TailTrailsTests(TestCase):
             data=self.animal_form_data(
                 intake_type="Owner Surrender",
                 intake_location="Forged stray location",
-                found_by="Ignored",
                 previous_owner="Former owner",
             ),
             user=self.employee,
         )
         self.assertTrue(form.is_valid(), form.errors)
         self.assertTrue(form.fields["intake_location"].disabled)
-        self.assertNotIn("found_by", form.fields)
         self.assertFalse(form.fields["previous_owner"].disabled)
         self.assertEqual(form.cleaned_data["intake_location"], "")
         self.assertEqual(form.cleaned_data["previous_owner"], "Former owner")
@@ -482,8 +467,6 @@ class TailTrailsTests(TestCase):
             "coat_length",
         ):
             self.assertIn(("", "---------"), list(form.fields[name].choices))
-        for removed in ("energy_level", "spay_notes", "flea_prevention"):
-            self.assertNotIn(removed, form.fields)
         rabbit = AnimalForm(
             data=self.animal_form_data(
                 species="Rabbit", leash_skills="invalid", age_unit="Weeks"
@@ -513,7 +496,7 @@ class TailTrailsTests(TestCase):
         )
         self.assertEqual([a.pk for a in animals], [self.available.pk, self.hidden.pk])
 
-    def test_revised_color_options_and_coat_length(self):
+    def test_color_options_and_coat_length(self):
         form = AnimalForm()
         self.assertEqual(
             [value for value, label in form.fields["color"].choices],

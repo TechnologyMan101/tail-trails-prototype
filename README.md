@@ -2,14 +2,14 @@
 
 Tail Trails is a role-based animal profile platform for shelters and rescues, built with Python 3.14, Django 5.2 LTS, PostgreSQL and Uvicorn/ASGI. The frontend uses Django templates, CSS and vanilla JavaScript.
 
-**This release is a fresh-install-only baseline. Databases and uploads from previous prototype builds are not supported.** The old upgrade chain is replaced by one Django initial schema, `shelter/migrations/0001_fresh_baseline.py`. It creates the current tables and permanent deceased-status protection directly. Django's own framework migrations remain in its dependency package.
+Database tables and permanent deceased-status safeguards are created by the initial Django schema in `shelter/migrations/0001_initial.py`.
 
-## Fresh installation with Docker Compose
+## Install with Docker Compose
 
 Extract the release into a new directory, then:
 
 ```bash
-cd /path/to/new/tail-trails
+cd /path/to/tail-trails
 cp .env.example .env
 # Set unique SECRET_KEY and POSTGRES_PASSWORD values in .env.
 # Configure hostname/proxy settings for your deployment.
@@ -19,9 +19,9 @@ docker compose logs --tail=100 app
 curl http://127.0.0.1:8000/healthz
 ```
 
-The default `TAILTRAILS_PORT` is 8000. The health response reports the build number from `VERSION`. Startup runs `initialize_database`, expired-upload cleanup, and initial demo seeding before starting Uvicorn. The initializer accepts an empty database or this same baseline and refuses earlier/untracked prototype schemas before modifying them. It never erases an old database automatically.
+The default `TAILTRAILS_PORT` is 8000. The health response reports the build number from `VERSION`. Startup applies the Django schema, removes expired pending uploads, seeds the demo database when empty and starts Uvicorn. Restarting the application keeps stored records and uploads; demo seeding skips databases that already contain accounts or animals.
 
-Subsequent restarts of this baseline reuse its own data. Demo seeding runs only while there are no accounts or animals, so a restart does not recreate deliberately deleted animals or replace staff edits.
+Windows PowerShell commands for repository setup, ZIP extraction, release tags and deployment are provided alongside Linux/macOS shell commands in `GIT_WORKFLOW.md`.
 
 All persistence uses bind-mounted folders next to `docker-compose.yml`; there are no named Docker volumes:
 
@@ -32,26 +32,6 @@ All persistence uses bind-mounted folders next to `docker-compose.yml`; there ar
 | `data/` | Optional SQLite database for local development |
 
 On Linux, set `TAILTRAILS_UID` and `TAILTRAILS_GID` to match the local folder owner when it differs from `1000:1000`.
-
-## Switching from an earlier prototype
-
-There is no in-place database upgrade or automatic data import into this baseline. Keep the previous installation separately if its records must remain accessible. Do not copy its `postgres-data/`, `data/` or `uploads/` folders into the new installation, and do not use `migrate --fake` to bypass the startup guard.
-
-Before switching a live deployment, back up the old installation while its database is running:
-
-```bash
-cd /path/to/old/tail-trails
-docker compose exec -T db sh -c \
-  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  > ../tailtrails-before-baseline.sql
-tar -czf ../tailtrails-uploads-before-baseline.tar.gz uploads
-cp .env ../tailtrails-env-before-baseline
-docker compose down
-```
-
-Extract this ZIP into a **new parent directory** and configure its `.env`. You may copy the old `.env` as a starting point, then compare it with the new `.env.example`. Start from the new `tail-trails/` directory using the fresh-install commands above. Leave the old data folders untouched. If both installations must run simultaneously, use different Compose project names and host ports.
-
-To return to the earlier installation, stop the new services and run the earlier build against its own original folders/backups. The backup SQL is for that earlier build; it is not an import path into this baseline.
 
 ## Demo accounts
 
@@ -87,8 +67,6 @@ Intake types are Stray, Owner Surrender, Animal Control, Transfer, Seizure and O
 
 Age uses Weeks/Months/Years with one decimal place. Weight is kg to 0.001 and height is cm to 0.1. Unsigned text controls reject negative typing/pastes without scroll-wheel increments; server validation also rejects negative submissions. Age, measurements and entered Total Hours permit zero. Nursing litter size must be at least 1; an activity must be at least 0.01 hours. The stored manual hour adjustment remains signed to support downward total corrections.
 
-Retired fields and compatibility routes are absent from this schema. There is no custom administrator activity log or per-animal change history.
-
 ## Deceased status, archive and deletion
 
 Employees and Administrators select **Deceased** in the normal status dropdown. Saving requires a reason, an acknowledgement checkbox and the signed-in user's current password. The reason, actor and time are retained on the animal. Model checks and PostgreSQL/SQLite triggers prevent reversing that confirmation, while other details remain editable. Django's backend does not offer a bypass for confirming or reversing this status.
@@ -101,7 +79,7 @@ Only Administrators see the distinct red **Delete animal record…** action next
 
 Official galleries allow five photos, primary-cover selection, clickable thumbnails, previous/next controls and a large-image view with keyboard navigation. Image management cards use bounded 4:3 thumbnails; missing files show styled placeholders.
 
-Animal uploads accept JPG, PNG, HEIC and HEIF, with extension and decoded-content validation. A complete multipart upload succeeds before opening cropping for every uploaded image. A fixed, uniformly scaled preview has a movable/resizable 3×3 crop selection, locked to the selected landscape/portrait ratio. Mouse, pen, touch and keyboard controls are supported. Finalization retains the exact original filename/bytes privately and creates a progressive web JPG without letterboxing. There is one crop-based image pipeline; no blurred-fill conversion or historical photo-backfill command is included.
+Animal uploads accept JPG, PNG, HEIC and HEIF, with extension and decoded-content validation. A complete multipart upload succeeds before opening cropping for every uploaded image. A fixed, uniformly scaled preview has a movable/resizable 3×3 crop selection, locked to the selected landscape/portrait ratio. Mouse, pen, touch and keyboard controls are supported. Finalization retains the exact original filename/bytes privately and creates a progressive web JPG without letterboxing.
 
 Defaults are 1600×1200 landscape / 1200×1600 portrait, 25 MiB per file and 160 MiB per complete request. The configured width/height are treated as long/short edges. EXIF rotation is applied before cropping. Employees and Administrators can download each retained original from the animal editor; public media access blocks private original paths.
 
@@ -166,7 +144,7 @@ For a new local development database:
 python3.14 -m venv .venv
 . .venv/bin/activate
 python -m pip install --require-hashes -r requirements.lock
-DB_ENGINE=sqlite python manage.py initialize_database
+DB_ENGINE=sqlite python manage.py migrate --noinput
 DB_ENGINE=sqlite python manage.py seed_demo
 DB_ENGINE=sqlite python manage.py runserver
 ```

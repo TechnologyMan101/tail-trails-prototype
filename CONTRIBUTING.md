@@ -1,6 +1,6 @@
 # Contributing to Tail Trails
 
-This repository is a fresh-install-only prototype baseline. Use a new database and upload directory; earlier prototype databases are unsupported. The single initial Django schema creates only current models and the permanent deceased-status trigger. Do not copy old migration chains back into this baseline or use `--fake` to attach old data.
+Tail Trails uses Django models and an initial database schema that includes permanent deceased-status safeguards. Set up the project using README.md, then use GIT_WORKFLOW.md for your platform's repository and release commands.
 
 ## Source map
 
@@ -20,7 +20,7 @@ This repository is a fresh-install-only prototype baseline. Use a new database a
 1. Branch from the team's current base using `GIT_WORKFLOW.md`.
 2. State the intended behavior and roles affected before changing shared workflows.
 3. Put authoritative validation/permissions on the server. Browser controls improve usability but do not replace server checks.
-4. Review model/schema changes together. Commit the schema definition and its reviewed Django migration representation with the code; a future upgrade policy must be agreed explicitly before promising compatibility.
+4. Review model/schema changes together and commit the Django migration files with the model code.
 5. Run checks appropriate to the change, including a new empty-database install for schema/startup changes. Keep permanent deceased-status protection covered at model and database levels.
 6. Update README/PDF narrative when behavior changes. Bump `VERSION` for a release, then tag the reviewed commit.
 
