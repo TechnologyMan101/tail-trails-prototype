@@ -48,7 +48,6 @@
         {% endif %}
         {% if user.role == 'Administrator' %}
           <div class="nav-label">Administration</div>
-          <a class="nav-link" href="{% url 'activity_log' %}">☷ Activity log</a>
           <a class="nav-link" href="{% url 'users' %}">♙ Manage users</a>
           <a class="nav-link" href="{% url 'organization' %}">⚙ Organization</a>
           <a class="nav-link {% if request.resolver_match.url_name == 'system_information' %}active{% endif %}" href="{% url 'system_information' %}">ⓘ System information</a>

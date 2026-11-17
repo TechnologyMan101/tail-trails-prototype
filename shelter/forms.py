@@ -1,5 +1,6 @@
 import json
 import re
+from decimal import Decimal
 from django import forms
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
@@ -8,6 +9,21 @@ from .models import Animal, Organization, Submission, User, VolunteerHour
 from .images import PHOTO_ACCEPT, validate_photo_upload
 from .branding_images import BRANDING_ACCEPT, validate_branding_upload
 from .animal_options import BREEDS, PATTERNS, COLORS
+
+
+def unsigned_number_input(precision):
+    return forms.TextInput(attrs={
+        "inputmode": "decimal" if precision else "numeric",
+        "data-nonnegative-decimal": str(precision),
+        "pattern": rf"[0-9]+(?:[.][0-9]{{1,{precision}}})?" if precision else r"[0-9]+",
+        "autocomplete": "off",
+    })
+
+
+def unsigned_decimal_field(model, name, precision, minimum="0"):
+    return model._meta.get_field(name).formfield(
+        min_value=Decimal(minimum), widget=unsigned_number_input(precision),
+    )
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -23,8 +39,13 @@ class MultipleFileField(forms.FileField):
 
 
 class AnimalForm(forms.ModelForm):
+    age = unsigned_decimal_field(Animal, "age", 1)
+    weight = unsigned_decimal_field(Animal, "weight", 3)
+    height = unsigned_decimal_field(Animal, "height", 1)
+    litter_size = forms.IntegerField(required=False, min_value=1, widget=unsigned_number_input(0))
     color = forms.MultipleChoiceField(required=False, label="Coat colors", choices=[(s, s) for s in COLORS], widget=forms.CheckboxSelectMultiple(attrs={"class": "coat-color-options"}))
-    fleas_status = forms.ChoiceField(label="Fleas", required=False, choices=[("", "---------"), ("Positive", "Positive"), ("Negative", "Negative")])
+    fleas_status = forms.ChoiceField(label="Fleas", choices=[("", "---------"), ("Positive", "Positive"), ("Negative", "Negative")])
+    heartworm_status = forms.ChoiceField(label="Heartworm status", choices=[("", "---------"), ("Positive", "Positive"), ("Negative", "Negative"), ("Unknown", "Unknown")])
     deceased_reason = forms.CharField(required=False, label="Reason for deceased status", widget=forms.Textarea(attrs={"rows": 3}))
     deceased_confirm = forms.BooleanField(required=False, label="I confirm this animal is deceased and understand this status is permanent.")
     deceased_password = forms.CharField(required=False, label="Your current password", strip=False, widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}))
@@ -45,8 +66,6 @@ class AnimalForm(forms.ModelForm):
             self.initial["color"] = [s.strip() for s in (self.instance.color or "").split(",") if s.strip()]
         self.fields["weight"].help_text = "Kilograms; up to three decimal places (0.001 kg = 1 g)."
         self.fields["height"].help_text = "Centimeters; one decimal place (0.1 cm = 1 mm)."
-        for name, precision in (("weight", 3), ("height", 1)):
-            self.fields[name].widget = forms.TextInput(attrs={"inputmode": "decimal", "data-nonnegative-decimal": str(precision), "pattern": rf"[0-9]*[.]?[0-9]{{0,{precision}}}", "autocomplete": "off"})
         value = lambda name: self.data.get(name, "") if self.is_bound else self.initial.get(name, getattr(self.instance, name, ""))
         conditions = {
             "intake_location": value("intake_type") == "Stray",
@@ -86,9 +105,6 @@ class AnimalForm(forms.ModelForm):
                 self.add_error("deceased_confirm", "Confirm that you understand this status is permanent.")
             if not self.user or not self.user.check_password(cleaned.get("deceased_password", "")):
                 self.add_error("deceased_password", "Enter your correct current password.")
-                if self.user:
-                    from .audit import record
-                    record('access', 'deceased.confirmation_failed', actor=self.user, outcome='failure', target=self.instance if self.instance.pk else None)
         return cleaned
 
     class Meta:
@@ -136,6 +152,7 @@ class SubmissionForm(forms.ModelForm):
 
 
 class VolunteerHourForm(forms.ModelForm):
+    hours = unsigned_decimal_field(VolunteerHour, "hours", 2, "0.01")
     class Meta:
         model = VolunteerHour
         fields = ("activity_date", "hours", "activity_type", "notes")
@@ -201,7 +218,7 @@ class OrganizationForm(forms.ModelForm):
 
 class UserManageForm(forms.ModelForm):
     password = forms.CharField(widget=forms.PasswordInput, required=False)
-    total_volunteer_hours = forms.DecimalField(label="Total Hours", min_value=0, max_digits=8, decimal_places=2, required=False, help_text="Replaces the displayed total. Recorded activities are preserved; the difference is stored as a manual adjustment.")
+    total_volunteer_hours = forms.DecimalField(label="Total Hours", min_value=0, max_digits=8, decimal_places=2, required=False, widget=unsigned_number_input(2), help_text="Replaces the displayed total. Recorded activities are preserved; the difference is stored as a manual adjustment.")
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.pk: self.initial['total_volunteer_hours'] = self.instance.total_hours

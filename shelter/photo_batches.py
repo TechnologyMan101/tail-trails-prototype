@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .images import store_cropped_photo
-from .models import AnimalHistory, AnimalPhoto, PendingPhoto, PhotoUploadBatch, Submission, SubmissionPhoto
+from .models import AnimalPhoto, PendingPhoto, PhotoUploadBatch, Submission, SubmissionPhoto
 
 
 ACTIVE_STATUSES = (PhotoUploadBatch.Status.PENDING, PhotoUploadBatch.Status.FAILED)
@@ -130,9 +130,6 @@ def finalize_photo_batch(batch_id, user, crop_payload):
                 ordered.sort(key=lambda photo: photo.pk != chosen)
             for position, photo in enumerate(ordered): photo.position = position
             AnimalPhoto.objects.bulk_update(ordered, ["position"])
-            from .audit import record
-            record('routine', 'animal.gallery_finalized', target=animal, animal_id=animal.pk, actor=user, changes={'photo_order':[photo.pk for photo in ordered]})
-            AnimalHistory.objects.create(animal=animal, user=user, summary=f"Added {len(created)} cropped photo(s)")
             result = ("animal", animal.pk)
         else:
             data = batch.submission_data

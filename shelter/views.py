@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import json
 import re
 from functools import wraps
@@ -23,12 +24,11 @@ from .forms import AccountForm, AnimalForm, OrganizationForm, SubmissionForm, Us
 from .branding import favicon_urls
 from .branding_images import branding_preview_bytes, delete_branding_asset, process_branding_asset, validate_branding_upload
 from .diagnostics import system_snapshot
-from .models import Animal, AnimalHistory, AnimalPhoto, Organization, PhotoUploadBatch, Submission, SubmissionPhoto, User, VolunteerHour
+from .models import Animal, AnimalPhoto, Organization, PhotoUploadBatch, Submission, SubmissionPhoto, User, VolunteerHour
 from .images import delete_photo_files
 from .photo_batches import cancel_photo_batch, create_photo_batch, finalize_photo_batch, parse_crop_payload
-from .audit import record
 from .confirmation import AnimalDeleteForm
-from .models import PendingPhoto, AuditEvent
+from .models import PendingPhoto
 
 
 def roles(*allowed):
@@ -61,7 +61,6 @@ def original_photo(request, kind, pk):
     filename = photo.original_filename or Path(photo.original_image.name).name
     try: response = FileResponse(photo.original_image.open("rb"), as_attachment=True, filename=filename)
     except OSError: raise Http404
-    record('access', 'photo.original_download', target=photo, animal_id=photo.animal_id if kind == 'animal' else photo.submission.animal_id)
     return response
 
 def sign_in(request):
@@ -105,7 +104,7 @@ def animals(request):
     return render(request, "animals.html", {"animals": qs.order_by(*order), "public": public, "sort": sort, "can_archive": can_archive, "include_archived": include_archived})
 
 def animal_profile(request, pk):
-    animal = get_object_or_404(Animal.objects.prefetch_related("photos", "history__user"), pk=pk)
+    animal = get_object_or_404(Animal.objects.prefetch_related("photos"), pk=pk)
     if animal.is_archived and not (request.user.is_authenticated and (request.user.is_superuser or request.user.role in ("Administrator", "Employee"))): raise Http404
     if not request.user.is_authenticated and animal.status != "Available":
         raise Http404
@@ -159,12 +158,6 @@ def animal_edit(request, pk=None):
                             photos.sort(key=lambda photo: photo.pk != chosen_id)
                         for position, photo in enumerate(photos): photo.position = position
                         AnimalPhoto.objects.bulk_update(photos, ["position"])
-                        if primary_photo_id:
-                            record('routine', 'animal.cover_selected', target=obj, animal_id=obj.pk, changes={'photo_order':[photo.pk for photo in photos]})
-                    summary = "Animal profile updated" if animal else "Animal profile created"
-                    if confirming_deceased: summary += "; Deceased status permanently confirmed with password verification"
-                    if animal and locked.is_archived != obj.is_archived: summary += "; record archived" if obj.is_archived else "; record restored from archive"
-                    AnimalHistory.objects.create(animal=obj, user=request.user, summary=summary)
                     batch = create_photo_batch(
                         user=request.user, animal=obj, workflow=PhotoUploadBatch.Workflow.STAFF,
                         uploads=uploads, make_primary=make_new_primary,
@@ -196,7 +189,7 @@ def _remove_orphan_files(files):
         if PendingPhoto.objects.filter(original=name).exists(): continue
         try: default_storage.delete(name)
         except OSError:
-            record('operational', 'storage.cleanup_failed', outcome='failure')
+            logging.getLogger(__name__).exception('Unable to remove an unreferenced image file after animal deletion.')
 
 
 @roles('Administrator')
@@ -213,7 +206,7 @@ def animal_delete(request, pk):
             files.update(PendingPhoto.objects.filter(batch__animal=animal).values_list('original', flat=True))
             animal.delete()
             transaction.on_commit(lambda: _remove_orphan_files(files))
-        messages.success(request, 'Animal record permanently deleted. An administrative audit event was retained.')
+        messages.success(request, 'Animal record permanently deleted.')
         return redirect('animals')
     return render(request, 'animal_delete.html', {'animal':animal, 'form':form})
 
@@ -351,7 +344,6 @@ def review_submission(request, pk, action):
             from django.http import Http404
             raise Http404
         submission.reviewed_by = request.user; submission.reviewed_at = timezone.now(); submission.save()
-        AnimalHistory.objects.create(animal=animal, user=request.user, summary=f'Volunteer submission {submission.pk} {submission.status.lower()}')
     messages.success(request, f"Submission {submission.status.lower()}."); return redirect(f"{reverse('submissions')}?status={submission.status}")
 
 @roles("Administrator", "Employee")

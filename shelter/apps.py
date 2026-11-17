@@ -4,6 +4,3 @@ class ShelterConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "shelter"
 
-    def ready(self):
-        from . import audit_signals  # noqa: F401
-

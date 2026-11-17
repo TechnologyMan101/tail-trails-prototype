@@ -1,6 +1,5 @@
 from django.urls import path
 from . import views
-from . import activity_views
 
 urlpatterns = [
     path("", views.home, name="home"), path("healthz", views.healthz, name="healthz"),
@@ -10,7 +9,6 @@ urlpatterns = [
     path("animals/<int:pk>/submit", views.submit_update, name="submit_update"),
     path('animals/<int:pk>/delete', views.animal_delete, name='animal_delete'),
     path('hours/<int:pk>/delete', views.hour_delete, name='hour_delete'),
-    path('activity', activity_views.activity_log, name='activity_log'),
     path("animals/<int:pk>/confirm-euthanized", views.animal_euthanize, name="animal_euthanize"),
     path("submissions", views.submissions, name="submissions"), path("submissions/<int:pk>/<str:action>", views.review_submission, name="review_submission"),
     path("hours", views.volunteer_hours, name="volunteer_hours"), path("users", views.manage_users, name="users"),

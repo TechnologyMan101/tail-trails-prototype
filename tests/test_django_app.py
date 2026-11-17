@@ -76,7 +76,6 @@ class TailTrailsTests(TestCase):
         self.assertEqual(self.available.deceased_reason, "Natural causes")
         self.assertEqual(self.available.deceased_by, self.employee)
         self.assertIsNotNone(self.available.deceased_at)
-        self.assertTrue(self.available.history.filter(summary__icontains="password verification").exists())
 
     def test_volunteer_cannot_confirm_euthanasia(self):
         self.login(self.volunteer)
@@ -158,11 +157,60 @@ class TailTrailsTests(TestCase):
             "intake_date":date.today(), "intake_type":"Stray", "intake_location":"Main", "held_at":"Kennel",
             "specific_location":"North", "kennel_id":"A1", "placed_date":date.today(), "color":["Tan"],
             "spay_status":"Spayed/Neutered", "status":"Available", "public_description":"Friendly dog",
-            "vaccination_status":"", "heartworm_status":"Unknown", "fleas_status":"",
+            "vaccination_status":"", "heartworm_status":"Unknown", "fleas_status":"Negative",
             "energy_level":"Unknown", "house_trained":"Unknown", "leash_skills":"Unknown",
         }
         data.update(overrides)
         return data
+
+    def test_fleas_and_heartworm_are_required_without_invented_defaults(self):
+        self.login(self.employee)
+        form = AnimalForm()
+        for name in ("fleas_status", "heartworm_status"):
+            self.assertTrue(form.fields[name].required)
+            self.assertEqual(list(form.fields[name].choices)[0][0], "")
+            data = self.animal_form_data(name="Missing medical value")
+            data.pop(name)
+            response = self.client.post(reverse("animal_new"), data)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(name, response.context["form"].errors)
+        self.assertFalse(Animal.objects.filter(name="Missing medical value").exists())
+        page = self.client.get(reverse("animal_new"))
+        self.assertContains(page, 'Fleas *')
+        self.assertContains(page, 'Heartworm status *')
+
+    def test_negative_animal_quantities_cannot_be_created_or_saved(self):
+        self.login(self.employee)
+        for field in ("age", "weight", "height", "litter_size"):
+            with self.subTest(field=field):
+                extra = {field: "-1"}
+                if field == "litter_size": extra.update(spay_status="Nursing", litter_dob=date.today())
+                for url in (reverse("animal_new"), reverse("animal_edit", args=[self.available.pk])):
+                    response = self.client.post(url, self.animal_form_data(**extra))
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn(field, response.context["form"].errors)
+        self.available.refresh_from_db()
+        self.assertEqual(self.available.age, 3)
+        valid = AnimalForm(data=self.animal_form_data(age="0", weight="0", height="0"), user=self.employee)
+        self.assertTrue(valid.is_valid(), valid.errors)
+
+    def test_numeric_inputs_have_unsigned_controls_and_no_wheel_increment(self):
+        form = AnimalForm()
+        for name, precision in (("age", 1), ("weight", 3), ("height", 1), ("litter_size", 0)):
+            self.assertEqual(form.fields[name].widget.input_type, "text")
+            self.assertEqual(form.fields[name].widget.attrs["data-nonnegative-decimal"], str(precision))
+            self.assertGreaterEqual(form.fields[name].min_value, 0)
+
+    def test_activity_log_and_animal_change_history_are_removed(self):
+        from django.apps import apps
+        for role in (self.admin, self.employee, self.volunteer):
+            self.login(role)
+            page = self.client.get(reverse("animal_profile", args=[self.available.pk]))
+            self.assertNotContains(page, "Change history")
+            self.assertNotContains(page, "Activity log")
+            self.assertEqual(self.client.get("/activity").status_code, 404)
+        for model in ("AuditEvent", "AnimalHistory"):
+            with self.assertRaises(LookupError): apps.get_model("shelter", model)
 
     def test_intake_dropdown_and_stray_fields_ignore_inactive_input(self):
         from shelter.animal_options import INTAKES
@@ -244,7 +292,7 @@ class TailTrailsTests(TestCase):
         form = AnimalForm()
         self.assertEqual([value for value, label in form.fields["color"].choices], ["Black", "White", "Blue/Gray", "Red/Orange", "Tan", "Cream", "Brown", "Silver"])
         self.assertEqual([value for value, label in form.fields["coat_length"].choices], ["", "Short", "Medium", "Long"])
-        data = self.animal_form_data(color=["Blue/Gray", "Red/Orange"], coat_length="Medium", heartworm_status="")
+        data = self.animal_form_data(color=["Blue/Gray", "Red/Orange"], coat_length="Medium", heartworm_status="Unknown")
         valid = AnimalForm(data=data, user=self.employee)
         self.assertTrue(valid.is_valid(), valid.errors)
         self.assertEqual(valid.cleaned_data["color"], "Blue/Gray, Red/Orange")

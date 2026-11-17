@@ -101,19 +101,34 @@ if (gallery) {
   }
 }
 
-const initializePhotoEditor = (photoEditor) => {
-  if (!photoEditor || photoEditor.dataset.uploadInitialized === 'true') return;
-  photoEditor.dataset.uploadInitialized = 'true';
-  $$('[data-nonnegative-decimal]', photoEditor).forEach((input) => {
-    const valid = new RegExp(`^\\d*(?:\\.\\d{0,${Number(input.dataset.nonnegativeDecimal)}})?$`);
-    let previous = input.value;
-    input.addEventListener('beforeinput', (event) => { if (event.data && /[-+eE]/.test(event.data)) event.preventDefault(); });
+// Apply the same unsigned input behavior to animal, activity and total-hour forms.
+const initializeUnsignedNumbers = (context = document) => {
+  $$('[data-nonnegative-decimal]', context).forEach((input) => {
+    if (input.dataset.unsignedInitialized === 'true') return;
+    input.dataset.unsignedInitialized = 'true';
+    const precision = Number(input.dataset.nonnegativeDecimal);
+    const valid = precision ? new RegExp(`^\\d*(?:\\.\\d{0,${precision}})?$`) : /^\d*$/;
+    let previous = valid.test(input.value) ? input.value : '';
+    input.addEventListener('beforeinput', (event) => {
+      if (event.data && /[-+eE]/.test(event.data)) event.preventDefault();
+    });
     input.addEventListener('input', () => {
       if (valid.test(input.value)) previous = input.value;
       else input.value = previous;
     });
-    input.addEventListener('blur', () => { if (input.value === '.') { input.value = ''; previous = ''; } });
+    input.addEventListener('blur', () => {
+      if (input.value === '.') input.value = '';
+      else if (input.value) input.value = input.value.replace(/^\./, '0.').replace(/\.$/, '');
+      previous = input.value;
+    });
   });
+};
+initializeUnsignedNumbers();
+
+const initializePhotoEditor = (photoEditor) => {
+  if (!photoEditor || photoEditor.dataset.uploadInitialized === 'true') return;
+  photoEditor.dataset.uploadInitialized = 'true';
+  initializeUnsignedNumbers(photoEditor);
   const animalValue = (name) => {
     const control = $(`[name="${name}"]`, photoEditor);
     return control?.type === 'checkbox' ? control.checked : control?.value;

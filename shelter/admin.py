@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.urls import reverse
 from django.utils.html import format_html
-from .models import Animal, AnimalPhoto, AnimalHistory, Organization, Submission, SubmissionPhoto, User, VolunteerHour
+from .models import Animal, AnimalPhoto, Organization, Submission, SubmissionPhoto, User, VolunteerHour
 
 @admin.register(User)
 class TailUserAdmin(UserAdmin):
@@ -50,4 +50,4 @@ class SubmissionPhotoAdmin(admin.ModelAdmin):
         if not obj.original_image: return "No retained original"
         return format_html('<a href="{}">Download original</a>', reverse("original_photo", args=["submission", obj.pk]))
 
-admin.site.register([Organization, AnimalHistory, Submission, VolunteerHour])
+admin.site.register([Organization, Submission, VolunteerHour])
