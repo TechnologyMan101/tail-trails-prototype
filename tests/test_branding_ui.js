@@ -14,6 +14,7 @@ class Element extends EventTarget {
   append(...children) { (this.children ||= []).push(...children); }
   replaceChildren(...children) { this.children = children; }
   focus() { this.focused = true; }
+  scrollIntoView(options) { this.scrolledIntoView = options; }
 }
 const event = (name, values = {}) => Object.assign(new Event(name, {cancelable: true}), values);
 const settle = () => new Promise(setImmediate);
@@ -107,6 +108,7 @@ function setup({cached = true, hasImage = true} = {}) {
 
   const save = setup(); save.fileInput.files = [{name: 'logo.png'}];
   save.form.dispatchEvent(event('submit'));
+  assert.equal(save.nodes['branding-save-status'].scrolledIntoView.block, 'nearest');
   assert.deepEqual(save.captures[0], [false, false, false, false], 'Capture files before disabling fields');
   assert.equal(save.fileInput.disabled, true);
   save.form.dispatchEvent(event('submit'));

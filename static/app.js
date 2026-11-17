@@ -602,6 +602,7 @@ if (brandingForm) {
     $('label', saveStatus).hidden = !hasFiles;
     saveProgress.value = 0;
     saveMessage.textContent = hasFiles ? 'Uploading image changes…' : 'Saving settings…';
+    saveStatus.scrollIntoView({block: 'nearest', behavior: 'smooth'});
     const request = new XMLHttpRequest(); request.open('POST', brandingForm.action || location.href);
     request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     request.setRequestHeader('Accept', 'application/json');

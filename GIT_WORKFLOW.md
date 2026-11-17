@@ -141,7 +141,7 @@ The root `VERSION` file is the only application-version source. Django reads it 
 For a new iteration, change only `VERSION` before testing and committing:
 
 ```bash
-printf '%s\n' '2026.11.17.5' > VERSION
+printf '%s\n' '2026.11.17.6' > VERSION
 ```
 
 Use the same value for the release commit, annotated Git tag, ZIP, and overview PDF. Do not add `APP_VERSION` to `.env` or Compose.
@@ -272,7 +272,7 @@ git push origin "v$version"
 `VERSION` supplies the application, health endpoint, static cache keys and overview PDF. Set it when preparing a release, then read its value into the PowerShell variable used by Git commands:
 
 ```powershell
-Set-Content -LiteralPath .\VERSION -Value '2026.11.17.5' -Encoding ascii
+Set-Content -LiteralPath .\VERSION -Value '2026.11.17.6' -Encoding ascii
 $version = (Get-Content -LiteralPath .\VERSION -Raw).Trim()
 ```
 

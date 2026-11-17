@@ -14,11 +14,6 @@
     <button type="button" class="button danger" data-branding-discard>Discard image changes</button>
   </div>
   <div class="flash error wide" data-branding-errors hidden role="alert" tabindex="-1"></div>
-  <div class="branding-save-status wide" data-branding-save-status hidden role="status" aria-live="polite">
-    <label for="branding-save-progress">Overall image upload progress</label>
-    <progress id="branding-save-progress" data-branding-save-progress max="100" value="0">0%</progress>
-    <p data-branding-save-message></p>
-  </div>
   <section class="form-section branding-editor">
     <h2>Branding</h2>
     {% if form.non_field_errors %}<ul class="errorlist" role="alert">{{ form.non_field_errors }}</ul>{% endif %}
@@ -50,6 +45,11 @@
 
     <div class="color-setting"><label for="{{ form.primary_color.id_for_label }}">Primary color</label><div class="color-control"><input type="color" value="{{ form.primary_color.value|default:'#245C4A' }}" data-color-picker data-color-target="{{ form.primary_color.id_for_label }}" aria-label="Choose primary color">{{ form.primary_color }}</div>{{ form.primary_color.errors }}</div>
     <div class="color-setting"><label for="{{ form.secondary_color.id_for_label }}">Secondary color</label><div class="color-control"><input type="color" value="{{ form.secondary_color.value|default:'#D47A45' }}" data-color-picker data-color-target="{{ form.secondary_color.id_for_label }}" aria-label="Choose secondary color">{{ form.secondary_color }}</div>{{ form.secondary_color.errors }}</div>
+    <div class="branding-save-status" data-branding-save-status hidden role="status" aria-live="polite">
+      <label for="branding-save-progress">Overall image upload progress</label>
+      <progress id="branding-save-progress" data-branding-save-progress max="100" value="0">0%</progress>
+      <p data-branding-save-message></p>
+    </div>
     <button class="button primary" type="submit">Save settings</button>
   </section>
   <aside class="preview-card">

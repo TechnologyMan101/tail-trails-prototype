@@ -4,7 +4,6 @@ The running application does not require ReportLab. VERSION is the release sourc
 
 import argparse
 import re
-import reportlab
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from pathlib import Path
@@ -93,10 +92,8 @@ styles = {
         fontSize=9,
         leading=13.5,
         textColor=DARK,
-        backColor=PALE,
-        borderPadding=10,
-        spaceBefore=5,
-        spaceAfter=14,
+        spaceBefore=0,
+        spaceAfter=0,
     ),
     "small": ParagraphStyle(
         "small",
@@ -120,18 +117,23 @@ styles = {
     "code": ParagraphStyle(
         "code",
         parent=base["Code"],
+        leftIndent=0,
+        rightIndent=0,
         fontSize=7.7,
         leading=10.5,
         textColor=INK,
-        backColor=PALE,
-        borderPadding=8,
-        spaceBefore=7,
-        spaceAfter=10,
+        spaceBefore=0,
+        spaceAfter=0,
     ),
 }
-# Embed bundled TrueType fonts so PDF readers do not substitute Type 1 fonts.
-font_root = Path(reportlab.__file__).parent / "fonts"
-for name, filename in [("OverviewSans", "Vera.ttf"), ("OverviewBold", "VeraBd.ttf")]:
+# Explicit embedded faces preserve headings, code alignment and tree glyphs.
+font_root = ROOT / "tools/fonts"
+for name, filename in [
+    ("OverviewSans", "DejaVuSans.ttf"),
+    ("OverviewBold", "DejaVuSans-Bold.ttf"),
+    ("OverviewHeading", "DejaVuSerif-Bold.ttf"),
+    ("OverviewMono", "DejaVuSansMono.ttf"),
+]:
     pdfmetrics.registerFont(TTFont(name, str(font_root / filename)))
 pdfmetrics.registerFontFamily(
     "OverviewSans",
@@ -140,12 +142,11 @@ pdfmetrics.registerFontFamily(
     italic="OverviewSans",
     boldItalic="OverviewBold",
 )
-for style in styles.values():
-    style.fontName = (
-        "OverviewSans"
-        if style.fontName == "Courier"
-        else ("OverviewBold" if style.fontName.endswith("Bold") else "OverviewSans")
-    )
+for name, style in styles.items():
+    style.fontName = {
+        "title": "OverviewHeading", "h1": "OverviewHeading",
+        "h2": "OverviewBold", "th": "OverviewBold", "code": "OverviewMono",
+    }.get(name, "OverviewSans")
 story = []
 
 
@@ -154,7 +155,25 @@ def p(text, style="body"):
 
 
 def para(text, style="body"):
-    story.append(p(text, style))
+    if style == "note":
+        story.append(panel(p(text, style)))
+    else:
+        story.append(p(text, style))
+
+
+def panel(content):
+    # Cell padding contributes to layout height; Paragraph borderPadding does not.
+    box = Table([[content]], colWidths=[518], hAlign="LEFT")
+    box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), PALE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    box.spaceBefore = 8
+    box.spaceAfter = 12
+    return box
 
 
 def head(text):
@@ -199,7 +218,10 @@ def table(rows, widths):
 
 
 def code(text):
-    story.append(Preformatted(text, styles["code"]))
+    for line in text.splitlines():
+        if pdfmetrics.stringWidth(line, "OverviewMono", styles["code"].fontSize) > 498:
+            raise ValueError(f"Code line exceeds its panel width: {line}")
+    story.append(panel(Preformatted(text, styles["code"])))
 
 
 def page(title):
@@ -332,25 +354,29 @@ para(
 # 3
 page("2. Source structure and authorization")
 code("""tail-trails/
-  config/                 Settings, root URLs, ASGI and WSGI
-  shelter/
-    models.py             Domain entities and permanent-status rules
-    forms.py              Server validation and unsigned number inputs
-    views.py              Roles, workflows, downloads and SSE
-    photo_batches.py      Pending uploads, deadlines and finalization
-    images.py             Animal originals and web-JPG generation
-    branding_images.py    Branding previews, crops and variants
-    diagnostics.py        Read-only system snapshots
-    migrations/           Initial Django database schema
-    management/commands/  Demo seed and pending cleanup
-  templates/              Server-rendered pages
-  static/                 CSS, JavaScript and fallback favicon
-  tests/                  Django and optional JavaScript checks
-  tools/build_overview.py Optional PDF generator
-  Dockerfile, docker-compose.yml, VERSION
-  README.md, GIT_WORKFLOW.md, CONTRIBUTING.md
-  requirements.in, requirements.lock
-  apache.example.conf, nginx.example.conf""")
+├── config/                  Settings, URLs, ASGI and WSGI
+├── shelter/
+│   ├── models.py            Domain entities and permanent-status rules
+│   ├── forms.py             Validation and unsigned number inputs
+│   ├── views.py             Roles, workflows, downloads and SSE
+│   ├── photo_batches.py     Pending uploads, deadlines and finalization
+│   ├── images.py            Animal originals and web-JPG generation
+│   ├── branding_images.py   Branding previews, crops and variants
+│   ├── diagnostics.py       Read-only system snapshots
+│   ├── migrations/          Initial Django database schema
+│   └── management/commands/ Demo seed and pending cleanup
+├── templates/               Server-rendered pages
+├── static/                  CSS, JavaScript and fallback favicon
+├── tests/                   Django and JavaScript checks
+├── tools/
+│   ├── build_overview.py    Optional PDF generator
+│   └── fonts/               Embedded PDF fonts and license
+├── Dockerfile
+├── docker-compose.yml
+├── VERSION
+├── README.md, GIT_WORKFLOW.md, CONTRIBUTING.md
+├── requirements.in, requirements.lock
+└── apache.example.conf, nginx.example.conf""")
 table(
     [
         ["Role", "Capabilities"],
@@ -488,7 +514,7 @@ table(
     [0.85, 2.65, 3.6],
 )
 para(
-    "Branding uses the same fixed-image 3 x 3 selector without stretching non-square sources. Preview and final uploads report progress. Image selection and deliberate crop changes start the configured timer. Page layout, resizing and name/color-only changes do not. The notice separates the countdown and a distinct discard button. Preview responses create no pending stored files. Discard releases browser selections. Successful saves navigate to freshly initialized settings; failed saves retain browser selections and crops for retry. Favicon fallback is dedicated icon, then logo, then a color-matched heart.",
+    "Branding uses the same fixed-image 3 x 3 selector without stretching non-square sources. Preview uploads report progress per image. Final save progress appears beside Save settings and scrolls into view. Image selection and deliberate crop changes start the configured timer. Page layout, resizing and name/color-only changes do not. The notice separates the countdown and a distinct discard button. Preview responses create no pending stored files. Discard releases browser selections. Successful saves navigate to freshly initialized settings; failed saves retain browser selections and crops for retry. Favicon fallback is dedicated icon, then logo, then a color-matched heart.",
     "small",
 )
 
@@ -593,11 +619,6 @@ table(
     ],
     [3.5, 3.6],
 )
-head("Start and verify")
-code("""cp .env.example .env
-# Set unique secrets and deployment values first.
-docker compose up --build -d
-curl http://127.0.0.1:8000/healthz""")
 
 # 8
 page("7. Installation and operations")
@@ -606,6 +627,11 @@ para(
     "Extract the tail-trails folder, configure .env and start the application with Docker Compose. PostgreSQL and uploaded assets persist in folders beside the Compose file.",
     "note",
 )
+head("Start and verify")
+code("""cp .env.example .env
+# Set unique secrets and deployment values first.
+docker compose up --build -d
+curl http://127.0.0.1:8000/healthz""")
 bullets(
     [
         "Startup runs Django migrate --noinput, pending-upload cleanup and demo seeding before starting Uvicorn.",
@@ -621,6 +647,7 @@ para(
 para(
     "Authenticated Server-Sent Events update cards without full page refresh. The refresh menu offers 1, 2 or 5 seconds, defaulting to 5; it retains the interval in the URL, pauses in hidden tabs and reconnects after interruptions. A static snapshot remains available without JavaScript."
 )
+page("8. Verification and maintenance")
 head("Release verification")
 if args.verified_tests is not None:
     para(
@@ -642,6 +669,13 @@ node tests/test_unsigned_inputs.js  # Optional; requires Node.js
 # Maintenance
 # Remove expired pending uploads immediately
 docker compose exec app python manage.py cleanup_photo_batches""")
+head("Regenerate this overview")
+para(
+    "The PDF builder is separate from the application. Install ReportLab in a local Python environment; the packaged fonts and their license are under tools/fonts/. Commands and the source tree use an embedded monospace font, and headings use explicit embedded faces."
+)
+code("""python -m pip install reportlab
+python tools/build_overview.py --output overview.pdf
+# Add --verified-tests N only after N tests actually pass.""")
 para(
     "See README.md for deployment, GIT_WORKFLOW.md for source imports/tags, and CONTRIBUTING.md for collaboration. VERSION supplies the build identifier. The optional PDF generator reads it directly.",
     "small",
