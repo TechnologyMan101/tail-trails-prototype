@@ -9,6 +9,6 @@ BREEDS = {
     "Cat": ["Domestic Shorthair", "Domestic Medium Hair", "Domestic Longhair", "Maine Coon", "Ragdoll", "Persian", "Exotic Shorthair", "British Shorthair", "Devon Rex", "Abyssinian", "Scottish Fold", "Sphynx", "Siberian", "Russian Blue", "American Shorthair", "Bengal", "Siamese", "Norwegian Forest Cat", "Oriental Shorthair", "Birman", "Burmese", "Tonkinese", "Turkish Angora", "Turkish Van", "Manx", "Cornish Rex", "Selkirk Rex", "Balinese", "Somali", "Mixed Breed"],
 }
 PATTERNS = ["Solid", "Bicolor", "Tricolor", "Tabby", "Classic Tabby", "Mackerel Tabby", "Spotted", "Ticked", "Tortoiseshell", "Calico", "Colorpoint", "Tuxedo", "Brindle", "Merle", "Roan", "Sable", "Saddle", "Piebald", "Harlequin", "Masked"]
-COLORS = ["Black", "White", "Gray", "Blue", "Brown", "Chocolate", "Tan", "Cream", "Fawn", "Red", "Orange", "Gold", "Silver", "Apricot", "Buff", "Other", "Unknown"]
+COLORS = ["Black", "White", "Blue/Gray", "Red/Orange", "Tan", "Cream", "Brown", "Silver"]
 INTAKES = [(s, s) for s in ("Stray", "Owner Surrender", "Animal Control", "Transfer", "Seizure", "Other")]
 YES_NO_UNKNOWN = [(s, s) for s in ("Yes", "No", "Unknown")]

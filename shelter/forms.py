@@ -23,7 +23,7 @@ class MultipleFileField(forms.FileField):
 
 
 class AnimalForm(forms.ModelForm):
-    color = forms.MultipleChoiceField(label="Coat colors", choices=[(s, s) for s in COLORS], widget=forms.CheckboxSelectMultiple(attrs={"class": "coat-color-options"}))
+    color = forms.MultipleChoiceField(required=False, label="Coat colors", choices=[(s, s) for s in COLORS], widget=forms.CheckboxSelectMultiple(attrs={"class": "coat-color-options"}))
     fleas_status = forms.ChoiceField(label="Fleas", required=False, choices=[("", "---------"), ("Positive", "Positive"), ("Negative", "Negative")])
     deceased_reason = forms.CharField(required=False, label="Reason for deceased status", widget=forms.Textarea(attrs={"rows": 3}))
     deceased_confirm = forms.BooleanField(required=False, label="I confirm this animal is deceased and understand this status is permanent.")
@@ -38,17 +38,16 @@ class AnimalForm(forms.ModelForm):
         self.fields["coat_pattern"].widget = forms.TextInput(attrs={"data-chip-input": "pattern", "data-chip-suggestions": json.dumps(PATTERNS)})
         self.fields["coat_pattern"].help_text = "Choose multiple patterns or add your own, separated by commas."
         self.fields["specific_location"].label = "Kennel location"
-        self.fields["found_by"].label = "Found by (strays only)"
         self.fields["intake_location"].label = "Intake location (strays only)"
         self.fields["has_microchip"].label = "Has Microchip"
         self.fields["microchip"].label = "Microchip ID"
         if not self.is_bound:
             self.initial["color"] = [s.strip() for s in (self.instance.color or "").split(",") if s.strip()]
-        for color in [s.strip() for s in (self.instance.color or "").split(",") if s.strip()]:
-            if color not in dict(self.fields["color"].choices): self.fields["color"].choices = [*self.fields["color"].choices, (color, color)]
+        self.fields["weight"].help_text = "Kilograms; up to three decimal places (0.001 kg = 1 g)."
+        self.fields["height"].help_text = "Centimeters; one decimal place (0.1 cm = 1 mm)."
         value = lambda name: self.data.get(name, "") if self.is_bound else self.initial.get(name, getattr(self.instance, name, ""))
         conditions = {
-            "intake_location": value("intake_type") == "Stray", "found_by": value("intake_type") == "Stray",
+            "intake_location": value("intake_type") == "Stray",
             "previous_owner": value("intake_type") == "Owner Surrender",
             "specific_location": value("held_at") == "Kennel", "kennel_id": value("held_at") == "Kennel",
             "foster_caregiver": value("held_at") == "Foster Home", "foster_phone": value("held_at") == "Foster Home", "foster_address": value("held_at") == "Foster Home",
@@ -89,7 +88,7 @@ class AnimalForm(forms.ModelForm):
 
     class Meta:
         model = Animal
-        exclude = ("animal_id", "created_at", "updated_at", "spay_notes", "energy_level", "flea_prevention")
+        exclude = ("animal_id", "created_at", "updated_at", "spay_notes", "energy_level", "flea_prevention", "found_by")
         widgets = {field: forms.Textarea(attrs={"rows": 3}) for field in (
             "medical_conditions", "medications", "spay_notes", "behavior_notes",
             "previous_owner", "public_description", "general_notes", "foster_address", "vaccination_notes",

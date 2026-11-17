@@ -93,18 +93,18 @@ class Animal(models.Model):
     placed_date = models.DateField()
     expected_stay = models.CharField(max_length=50, blank=True)
     transfer_date = models.DateField(null=True, blank=True)
-    color = models.TextField()
+    color = models.TextField(blank=True)
     coat_pattern = models.TextField(blank=True)
     coat_type = models.CharField(max_length=50, blank=True)
-    coat_length = models.CharField(max_length=30, blank=True)
-    weight = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
-    height = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
+    coat_length = models.CharField(max_length=30, blank=True, choices=[(s, s) for s in ("Short", "Medium", "Long")])
+    weight = models.DecimalField("weight (kg)", max_digits=8, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(0)])
+    height = models.DecimalField("height (cm)", max_digits=6, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     medical_conditions = models.TextField(blank=True)
     medications = models.TextField(blank=True)
     vaccination_status = models.CharField(max_length=50, blank=True, default="", choices=[(s, s) for s in ("Up to Date", "In Progress", "Unvaccinated")])
     vaccination_notes = models.TextField(blank=True)
     fleas_status = models.CharField(max_length=10, blank=True, choices=[("Positive", "Positive"), ("Negative", "Negative")])
-    heartworm_status = models.CharField(max_length=50, default="Unknown", choices=[(s, s) for s in ("Positive", "Negative", "Unknown")])
+    heartworm_status = models.CharField(max_length=50, blank=True, default="", choices=[(s, s) for s in ("Positive", "Negative", "Unknown")])
     flea_prevention = models.CharField(max_length=20, default="Unknown")
     spay_status = models.CharField(max_length=20, choices=SPAY)
     spay_notes = models.TextField(blank=True)
@@ -155,7 +155,7 @@ class Animal(models.Model):
     @property
     def size_class(self):
         if self.weight is None: return "Unknown"
-        w = float(self.weight)
+        w = float(self.weight) / 0.45359237
         if self.species == "Dog": return "Small" if w < 25 else "Medium" if w < 60 else "Large" if w < 100 else "Extra Large"
         if self.species == "Cat": return "Small" if w < 8 else "Medium" if w < 13 else "Large"
         return "Unknown"

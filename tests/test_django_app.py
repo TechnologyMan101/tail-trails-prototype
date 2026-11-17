@@ -169,10 +169,9 @@ class TailTrailsTests(TestCase):
         form = AnimalForm(data=self.animal_form_data(intake_type="Owner Surrender", intake_location="Forged stray location", found_by="Ignored", previous_owner="Former owner"), user=self.employee)
         self.assertTrue(form.is_valid(), form.errors)
         self.assertTrue(form.fields["intake_location"].disabled)
-        self.assertTrue(form.fields["found_by"].disabled)
+        self.assertNotIn("found_by", form.fields)
         self.assertFalse(form.fields["previous_owner"].disabled)
         self.assertEqual(form.cleaned_data["intake_location"], "")
-        self.assertEqual(form.cleaned_data["found_by"], "")
         self.assertEqual(form.cleaned_data["previous_owner"], "Former owner")
         self.assertEqual(len(INTAKES), 6)
         stray = AnimalForm(data=self.animal_form_data(intake_location=""), user=self.employee)
@@ -223,7 +222,7 @@ class TailTrailsTests(TestCase):
 
     def test_medical_selects_defaults_and_species_conditional_leash(self):
         form = AnimalForm()
-        for name in ("vaccination_status", "fleas_status", "house_trained", "leash_skills"):
+        for name in ("vaccination_status", "fleas_status", "house_trained", "leash_skills", "heartworm_status", "coat_length"):
             self.assertIn(("", "---------"), list(form.fields[name].choices))
         for removed in ("energy_level", "spay_notes", "flea_prevention"):
             self.assertNotIn(removed, form.fields)
@@ -240,6 +239,30 @@ class TailTrailsTests(TestCase):
         Animal.objects.filter(pk=self.hidden.pk).update(age=1, age_unit="Years")
         animals = list(self.client.get(reverse("animals") + "?sort=age_asc").context["animals"])
         self.assertEqual([a.pk for a in animals], [self.available.pk, self.hidden.pk])
+
+    def test_revised_color_options_and_coat_length(self):
+        form = AnimalForm()
+        self.assertEqual([value for value, label in form.fields["color"].choices], ["Black", "White", "Blue/Gray", "Red/Orange", "Tan", "Cream", "Brown", "Silver"])
+        self.assertEqual([value for value, label in form.fields["coat_length"].choices], ["", "Short", "Medium", "Long"])
+        data = self.animal_form_data(color=["Blue/Gray", "Red/Orange"], coat_length="Medium", heartworm_status="")
+        valid = AnimalForm(data=data, user=self.employee)
+        self.assertTrue(valid.is_valid(), valid.errors)
+        self.assertEqual(valid.cleaned_data["color"], "Blue/Gray, Red/Orange")
+        invalid = AnimalForm(data=self.animal_form_data(color=["Unknown"], coat_length="Curly"), user=self.employee)
+        self.assertFalse(invalid.is_valid())
+        self.assertIn("color", invalid.errors)
+        self.assertIn("coat_length", invalid.errors)
+
+    def test_metric_measurements_enforce_gram_and_mm_precision(self):
+        from decimal import Decimal
+        form = AnimalForm(data=self.animal_form_data(weight="12.345", height="45.6"), user=self.employee)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["weight"], Decimal("12.345"))
+        self.assertEqual(form.cleaned_data["height"], Decimal("45.6"))
+        invalid = AnimalForm(data=self.animal_form_data(weight="12.3456", height="45.67"), user=self.employee)
+        self.assertFalse(invalid.is_valid())
+        self.assertIn("weight", invalid.errors)
+        self.assertIn("height", invalid.errors)
 
     def test_foster_contact_information_is_staff_only(self):
         Animal.objects.filter(pk=self.available.pk).update(held_at="Foster Home", foster_phone="619-555-0199", foster_address="Private Foster Address")

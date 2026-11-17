@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from django.core.management.base import BaseCommand
 from shelter.models import Animal, AnimalPhoto, Organization, Submission, User, VolunteerHour
 
@@ -40,7 +41,9 @@ class Command(BaseCommand):
             if values["held_at"] == "Foster Home":
                 values.update(foster_phone="(619) 555-0123", foster_address="123 Example Lane, San Diego, CA (demo)")
             if values["color"] == "Brindle": values.update(color="Unknown", coat_pattern="Brindle")
-            if values["color"] == "Gray / Blue": values["color"] = "Gray, Blue"
+            if values["color"] == "Gray / Blue": values["color"] = "Blue/Gray"
+            if values["color"] == "Unknown": values["color"] = ""
+            if values.get("weight") is not None: values["weight"] = (Decimal(str(values["weight"])) * Decimal('0.45359237')).quantize(Decimal('0.001'))
             # Startup must not overwrite staff edits, archives, or permanent statuses.
             animal, _ = Animal.objects.get_or_create(animal_id=values["animal_id"], defaults=values)
             if not animal.photos.exists():

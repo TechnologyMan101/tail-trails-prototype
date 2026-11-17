@@ -113,8 +113,7 @@ const initializePhotoEditor = (photoEditor) => {
   };
   const syncAnimalFields = () => {
     const stray = animalValue('intake_type') === 'Stray';
-    setAnimalField('intake_location', stray, {grey: true, required: true});
-    setAnimalField('found_by', stray, {grey: true});
+    setAnimalField('intake_location', stray, {required: true});
     setAnimalField('previous_owner', animalValue('intake_type') === 'Owner Surrender');
     const kennel = animalValue('held_at') === 'Kennel';
     const foster = animalValue('held_at') === 'Foster Home';
@@ -133,11 +132,17 @@ const initializePhotoEditor = (photoEditor) => {
     const pool = JSON.parse(input.dataset.chipSuggestions || '[]');
     const selected = document.createElement('div'); selected.className = 'selected-chips';
     selected.setAttribute('aria-label', `Selected ${input.name}`);
-    const details = document.createElement('details'); details.className = 'suggestion-picker';
-    const summary = document.createElement('summary'); summary.textContent = input.name === 'breed' ? 'Choose breed suggestions' : 'Choose coat pattern suggestions';
-    const filter = document.createElement('input'); filter.type = 'search'; filter.placeholder = 'Filter suggestions'; filter.setAttribute('aria-label', `Filter ${input.name} suggestions`);
+    const details = document.createElement('div'); details.className = 'suggestion-picker';
+    const summary = document.createElement('div'); summary.className = 'suggestion-heading';
+    const heading = document.createElement('span'); heading.textContent = input.name === 'breed' ? 'Breed suggestions' : 'Coat pattern suggestions';
+    const count = document.createElement('span'); count.className = 'suggestion-count'; count.setAttribute('aria-live', 'polite'); summary.append(heading, count);
+    const filter = document.createElement('input'); filter.type = 'search'; filter.placeholder = 'Search suggestions or enter a custom value'; filter.setAttribute('aria-label', `Search ${input.name} suggestions or enter a custom value`);
     const options = document.createElement('div'); options.className = 'suggestion-chips';
-    details.append(summary, filter, options); input.after(selected, details);
+    const empty = document.createElement('p'); empty.className = 'suggestion-empty'; empty.setAttribute('role', 'status');
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'button ghost compact';
+    details.append(summary, filter, options, empty, add); input.after(selected, details);
+    filter.id = input.id; input.id = `${input.id}_values`;
+    input.type = 'hidden';
     const values = () => [...new Set(input.value.split(',').map((s) => s.trim()).filter(Boolean))];
     const toggle = (value) => {
       const current = values();
@@ -148,12 +153,21 @@ const initializePhotoEditor = (photoEditor) => {
       const current = values(); selected.replaceChildren();
       current.forEach((value) => {
         const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'selected-chip'; chip.textContent = `${value} ×`;
-        chip.setAttribute('aria-label', `Remove ${value}`); chip.addEventListener('click', () => { toggle(value); input.focus(); }); selected.append(chip);
+        chip.setAttribute('aria-label', `Remove ${value}`); chip.addEventListener('click', () => { toggle(value); filter.focus(); }); selected.append(chip);
       });
       $$('button', options).forEach((button) => {
         button.setAttribute('aria-pressed', String(current.includes(button.textContent)));
         button.hidden = !button.textContent.toLowerCase().includes(filter.value.toLowerCase());
       });
+      const total = $$('button', options).length;
+      const shown = $$('button', options).filter((button) => !button.hidden).length;
+      count.textContent = `${shown} / ${total}`;
+      const query = filter.value.trim();
+      empty.hidden = shown > 0;
+      empty.textContent = query ? 'No matching suggestions. You can add this as a custom value.' : 'No predefined suggestions for this species. Type a custom value above.';
+      add.hidden = !query || shown > 0;
+      add.disabled = current.some((value) => value.toLowerCase() === query.toLowerCase());
+      add.textContent = add.disabled ? `“${query}” is already selected` : `Add “${query}”`;
     };
     const updatePool = () => {
       const suggestions = Array.isArray(pool) ? pool : (pool[animalValue('species')] || []);
@@ -162,9 +176,10 @@ const initializePhotoEditor = (photoEditor) => {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = value;
         button.addEventListener('click', () => toggle(value)); options.append(button);
       });
-      summary.textContent = `${input.name === 'breed' ? 'Breed' : 'Coat pattern'} suggestions (${suggestions.length})`;
       refresh();
     };
+    add.addEventListener('click', () => { const value = filter.value.trim(); if (value && !add.disabled) { toggle(value); filter.value = ''; refresh(); filter.focus(); } });
+    filter.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); if (!add.hidden && !add.disabled) add.click(); } });
     input.addEventListener('input', refresh); filter.addEventListener('input', refresh);
     $('[name="species"]', photoEditor)?.addEventListener('change', updatePool);
     updatePool();
