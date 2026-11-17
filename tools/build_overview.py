@@ -611,7 +611,7 @@ bullets(
         "Startup runs Django migrate --noinput, pending-upload cleanup and demo seeding before starting Uvicorn.",
         "The initial 0001_initial schema creates application tables and permanent deceased-status safeguards. Database initialization is repeatable on application restarts.",
         "Demo seeding validates required animal fields and runs when there are no accounts or animals. Records and uploads remain available across restarts.",
-        "README.md documents deployment and configuration. GIT_WORKFLOW.md provides Linux/macOS shell and Windows PowerShell commands for repositories, ZIP imports, tags and deployment.",
+        "README.md documents deployment and configuration. GIT_WORKFLOW.md lists prerequisites by platform and task, with Linux/macOS shell and Windows PowerShell commands for repositories, ZIP imports, tags and deployment.",
     ]
 )
 head("System information")

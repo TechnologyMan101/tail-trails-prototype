@@ -12,6 +12,91 @@ This guide keeps the Git repository, application build number, release ZIP, depl
 
 Git configuration and repository operations work across platforms. Importing and committing packaged source does not require Python or SQLite. Development, testing and dependency refreshes require the project Python tools; Docker is needed to run/deploy the containers. Paths below are examples; substitute your own.
 
+## Required utilities and dependencies
+
+Choose the row for the work you are doing. These tools are for source maintainers and people deploying the application. Staff, volunteers and public visitors using a deployed site need a web browser; they do not need Git or developer tools.
+
+### Requirements by task
+
+| Task | Required on your computer | Additional notes |
+| --- | --- | --- |
+| Clone, commit, branch, tag, pull or push | Git 2.28 or newer and your platform's shell | Network access and repository credentials are needed for remote operations. |
+| Import a generated ZIP on Linux/macOS | Git, Bash/zsh, `unzip`, `rsync`, and the standard `cat`, `cp`, `mktemp`, `printf` utilities | The commands below stage, preview and synchronize the extracted source. |
+| Import a generated ZIP on Windows PowerShell | Git for Windows, PowerShell 5.1 or 7, and Windows Robocopy | ZIP extraction and file/path operations use built-in PowerShell commands. No separate ZIP application is needed. |
+| Import a generated ZIP in Windows Git Bash | Git Bash plus the same commands listed for Linux/macOS | Check `unzip` and `rsync` explicitly; use the PowerShell workflow if they are unavailable. |
+| Create a release ZIP from a Git tag | Git and the selected shell | `git archive` creates the ZIP; a separate `zip` utility is not required. |
+| Edit source, `VERSION` or `.env` | A plain-text editor | Use a code/plain-text format when saving files. |
+| Build/run/deploy with Compose | Docker CLI, a running Docker Engine, and the Compose plugin providing `docker compose` | Docker Desktop supplies these together; Linux can also use Engine with the Compose plugin. Use Linux containers. Git is needed if deploying from a Git clone. |
+| Check the running health endpoint | Linux/macOS: `curl`; Windows: PowerShell `Invoke-RestMethod` | These are used only for the health-check commands. |
+| Run Django tests on the host | Python 3.14 with `venv`, `pip`, the Python `sqlite3` module, and packages from `requirements.lock` | The documented test command uses an isolated SQLite database. |
+| Run the application directly on the host | Python 3.14 with `venv`, `pip` and packages from `requirements.lock`, plus the configured database connection | Local SQLite development needs Python's `sqlite3` module. PostgreSQL mode needs access to a PostgreSQL server. |
+| Refresh `requirements.lock` | `uv` and the project's Python tooling | Required for the `uv pip compile` line, not for ordinary Git operations. |
+| Run optional JavaScript checks | Node.js | The shown checks use Node's built-in modules; no npm install step is required. |
+| Generate the overview PDF | Python and the `reportlab` package | Install ReportLab with `python -m pip install reportlab`; it is not an application runtime requirement. |
+| Publish behind HTTPS | A configured reverse proxy such as Apache or Nginx and a certificate | Follow README.md and the supplied proxy examples. This is not required to import source or make Git commits. |
+
+**Importing and committing a pre-made ZIP requires no Python, SQLite installation, Docker, Node.js, `uv` or ReportLab.** Install only the source-import tools for your platform. The SQLite command-line program is not needed for the test workflow either; tests use Python's `sqlite3` module. Compose provides the application's Python packages and PostgreSQL inside containers, so the Docker workflow does not require host application packages or a host PostgreSQL installation.
+
+The Linux/macOS branch workflow includes a dependency-lock refresh command. Install `uv` before running that line, or skip that line when you are not refreshing dependencies. The Python test commands are also optional for packaged-source imports.
+
+### Platform readiness checks
+
+**Linux and macOS Terminal:** use Bash or zsh. Run the following before the ZIP-import workflow; any `Missing:` line identifies a utility to install using your platform's package manager or official installer:
+
+```bash
+for utility in git cat cp mktemp printf unzip rsync; do
+  command -v "$utility" >/dev/null 2>&1 || printf 'Missing: %s\n' "$utility"
+done
+git --version
+```
+
+These checks also apply to Git Bash. Do not assume every Unix utility is present just because Git itself is installed.
+
+**Windows PowerShell:** install Git for Windows and use PowerShell 5.1 or PowerShell 7. Robocopy is supplied by Windows; the remaining listed file/archive commands are PowerShell commands:
+
+```powershell
+$PSVersionTable.PSVersion
+git --version
+Get-Command git, robocopy, Expand-Archive, Get-Content, Set-Content, Join-Path, New-Item, Test-Path, Remove-Item
+```
+
+**Docker deployment, on any platform:** confirm that both the CLI/plugin and the engine are available before using deployment commands:
+
+```text
+docker --version
+docker compose version
+docker info
+```
+
+Docker Desktop must be running when using its engine. On Linux with Docker Engine, the Docker service must be running and your account must be able to access it. For the example health check, Linux/macOS users can check `curl --version`; PowerShell users can check `Get-Command Invoke-RestMethod`.
+
+**Optional development tools:** run only the checks relevant to the tasks you selected above:
+
+| Tool or capability | Availability check |
+| --- | --- |
+| Project Python | `python --version` (the application targets Python 3.14) |
+| pip | `python -m pip --version` |
+| Python virtual environments and SQLite module | `python -c "import venv, sqlite3; print(sqlite3.sqlite_version)"` |
+| Installed application packages | `python -m pip check` after installing `requirements.lock` |
+| Dependency resolver | `uv --version` |
+| JavaScript checks | `node --version` |
+| PDF generation | `python -c "import reportlab; print(reportlab.Version)"` |
+
+Use the project's Python environment for local tests. Install its packages with `python -m pip install --require-hashes -r requirements.lock`; see README.md for environment setup. Some Python distributions package `venv` or pip separately, so check those capabilities as well as the interpreter version.
+
+### Installation references
+
+Use the official installation instructions for the tool and your platform:
+
+- [Git installation](https://git-scm.com/install/) and [Git for Windows](https://gitforwindows.org/)
+- [PowerShell installation](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
+- [Docker Compose installation options](https://docs.docker.com/compose/install/)
+- [Python downloads](https://www.python.org/downloads/)
+- [uv installation](https://docs.astral.sh/uv/getting-started/installation/)
+- [Node.js downloads](https://nodejs.org/en/download)
+
+For Linux/macOS command-line utilities such as `unzip`, `rsync` and `curl`, use your operating system's package manager when they are missing.
+
 ## Repository safety
 
 The repository tracks source code and empty persistence-folder placeholders. It must not track:
@@ -56,7 +141,7 @@ The root `VERSION` file is the only application-version source. Django reads it 
 For a new iteration, change only `VERSION` before testing and committing:
 
 ```bash
-printf '%s\n' '2026.11.17.3' > VERSION
+printf '%s\n' '2026.11.17.4' > VERSION
 ```
 
 Use the same value for the release commit, annotated Git tag, ZIP, and overview PDF. Do not add `APP_VERSION` to `.env` or Compose.
@@ -187,7 +272,7 @@ git push origin "v$version"
 `VERSION` supplies the application, health endpoint, static cache keys and overview PDF. Set it when preparing a release, then read its value into the PowerShell variable used by Git commands:
 
 ```powershell
-Set-Content -LiteralPath .\VERSION -Value '2026.11.17.3' -Encoding ascii
+Set-Content -LiteralPath .\VERSION -Value '2026.11.17.4' -Encoding ascii
 $version = (Get-Content -LiteralPath .\VERSION -Raw).Trim()
 ```
 
