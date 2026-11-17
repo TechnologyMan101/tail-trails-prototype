@@ -13,7 +13,7 @@ FAVICON_SIZES = (32, 180)
 def _brand_rgb(value):
     value = (value or "#245C4A").lstrip("#")
     try:
-        return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+        return tuple(int(value[index : index + 2], 16) for index in (0, 2, 4))
     except (TypeError, ValueError):
         return (36, 92, 74)
 
@@ -24,11 +24,13 @@ def _source_field(organization):
 
 def _cache_key(organization):
     source = _source_field(organization)
-    identity = "|".join([
-        str(organization.pk or 0),
-        getattr(source, "name", "") or "default-heart",
-        organization.primary_color or "",
-    ])
+    identity = "|".join(
+        [
+            str(organization.pk or 0),
+            getattr(source, "name", "") or "default-heart",
+            organization.primary_color or "",
+        ]
+    )
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
 
 
@@ -38,7 +40,12 @@ def _heart_icon(size, background):
     for step in range(180):
         angle = (2 * math.pi * step) / 180
         x = 16 * math.sin(angle) ** 3
-        y = 13 * math.cos(angle) - 5 * math.cos(2 * angle) - 2 * math.cos(3 * angle) - math.cos(4 * angle)
+        y = (
+            13 * math.cos(angle)
+            - 5 * math.cos(2 * angle)
+            - 2 * math.cos(3 * angle)
+            - math.cos(4 * angle)
+        )
         points.append((size / 2 + x * scale, size / 2 - y * scale + size * 0.04))
     image = Image.new("RGB", (size, size), background)
     ImageDraw.Draw(image).polygon(points, fill=(255, 255, 255))

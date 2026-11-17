@@ -11,7 +11,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         interval = max(1, settings.PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES)
-        self.stdout.write(f"Photo batch cleanup service ready (every {interval} minute(s))")
+        self.stdout.write(
+            f"Photo batch cleanup service ready (every {interval} minute(s))"
+        )
         while True:
             removed = cleanup_expired_batches()
             if removed:

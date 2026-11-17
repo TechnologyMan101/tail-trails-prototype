@@ -2,15 +2,21 @@ from django import forms
 
 
 class AnimalDeleteForm(forms.Form):
-    confirm = forms.BooleanField(label='I understand that this animal record, submissions and attached photos will be permanently deleted.')
-    password = forms.CharField(label='Your current password', strip=False, widget=forms.PasswordInput(attrs={'autocomplete':'current-password'}))
+    confirm = forms.BooleanField(
+        label="I understand that this animal record, submissions and attached photos will be permanently deleted."
+    )
+    password = forms.CharField(
+        label="Your current password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+    )
 
     def __init__(self, *args, user, animal, **kwargs):
         self.user, self.animal = user, animal
         super().__init__(*args, **kwargs)
 
     def clean_password(self):
-        value = self.cleaned_data['password']
+        value = self.cleaned_data["password"]
         if not self.user.check_password(value):
-            raise forms.ValidationError('Your password is incorrect.')
+            raise forms.ValidationError("Your password is incorrect.")
         return value

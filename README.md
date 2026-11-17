@@ -1,106 +1,61 @@
-# Tail Trails — Django/PostgreSQL prototype
+# Tail Trails prototype
 
-Tail Trails is a role-based animal profile platform for shelters and rescues. This version uses Python 3.14, Django 5.2 LTS, PostgreSQL, and an ASGI/Uvicorn runtime, with model migrations, built-in authentication foundations, transactional approval workflows, structured uploads, an ordered animal photo gallery, and a read-only Server-Sent Events status stream.
+Tail Trails is a role-based animal profile platform for shelters and rescues, built with Python 3.14, Django 5.2 LTS, PostgreSQL and Uvicorn/ASGI. The frontend uses Django templates, CSS and vanilla JavaScript.
 
-## Run with Docker Compose
+**This release is a fresh-install-only baseline. Databases and uploads from previous prototype builds are not supported.** The old upgrade chain is replaced by one Django initial schema, `shelter/migrations/0001_fresh_baseline.py`. It creates the current tables and permanent deceased-status protection directly. Django's own framework migrations remain in its dependency package.
+
+## Fresh installation with Docker Compose
+
+Extract the release into a new directory, then:
 
 ```bash
+cd /path/to/new/tail-trails
 cp .env.example .env
-# Replace SECRET_KEY and POSTGRES_PASSWORD in .env.
-docker compose up --build
+# Set unique SECRET_KEY and POSTGRES_PASSWORD values in .env.
+# Configure hostname/proxy settings for your deployment.
+docker compose up --build -d
+docker compose ps
+docker compose logs --tail=100 app
+curl http://127.0.0.1:8000/healthz
 ```
 
-Open <http://localhost:8000> with the default `TAILTRAILS_PORT=8000`. On first startup, Django applies migrations and creates demonstration data.
+The default `TAILTRAILS_PORT` is 8000. The health response reports the build number from `VERSION`. Startup runs `initialize_database`, expired-upload cleanup, and initial demo seeding before starting Uvicorn. The initializer accepts an empty database or this same baseline and refuses earlier/untracked prototype schemas before modifying them. It never erases an old database automatically.
 
-If replacing an earlier prototype build, force Docker to discard the old application image while preserving the local database and upload folders:
+Subsequent restarts of this baseline reuse its own data. Demo seeding runs only while there are no accounts or animals, so a restart does not recreate deliberately deleted animals or replace staff edits.
 
-```bash
-docker compose down --remove-orphans
-docker compose build --no-cache app cleanup
-docker compose up -d --force-recreate
-curl http://localhost:8000/healthz
-```
+All persistence uses bind-mounted folders next to `docker-compose.yml`; there are no named Docker volumes:
 
-The health response reports the value stored in the root `VERSION` file. If another version appears after an upgrade, the reverse proxy is still routing to an older container or the new project archive was not extracted into the Compose directory.
+| Host folder | Purpose |
+| --- | --- |
+| `postgres-data/pgdata/` | PostgreSQL cluster; a child directory avoids initialization errors from mount-root metadata |
+| `uploads/` | Private source images, pending uploads and generated web assets |
+| `data/` | Optional SQLite database for local development |
 
-`VERSION` is the single authoritative build number used by Django, the health endpoint, static-asset cache keys, the administrator System Information page, release tags, and generated artifacts. Update only that file when starting a new iteration; Compose and `.env` do not duplicate or override it.
+On Linux, set `TAILTRAILS_UID` and `TAILTRAILS_GID` to match the local folder owner when it differs from `1000:1000`.
 
-For repository setup, importing release ZIPs, branches, commits, tags, Git-based deployment, and generating ZIPs from tags, see [`GIT_WORKFLOW.md`](GIT_WORKFLOW.md).
+## Switching from an earlier prototype
 
-All persistent data stays in folders beside `docker-compose.yml`; no named Docker volumes are used:
+There is no in-place database upgrade or automatic data import into this baseline. Keep the previous installation separately if its records must remain accessible. Do not copy its `postgres-data/`, `data/` or `uploads/` folders into the new installation, and do not use `migrate --fake` to bypass the startup guard.
 
-- `postgres-data/pgdata/` — PostgreSQL database cluster files. `PGDATA` deliberately points to this child directory so the bind-mount root may safely contain `.gitkeep`.
-- `uploads/` — animal, submission, logo, and banner images
-
-On Linux, the container defaults to UID/GID `1000:1000`. Change `TAILTRAILS_UID` and `TAILTRAILS_GID` in `.env` if the two persistent folders belong to a different local user.
-
-## In-place upgrades
-
-Release archives contain one top-level `tail-trails/` folder. Do not delete or replace the live folder wholesale because `.env`, uploaded files, and the PostgreSQL cluster live inside it. Preserve these paths during every upgrade:
-
-- `.env`
-- `uploads/`
-- `postgres-data/`
-- `data/` when SQLite development data is used
-- `.git/` when the deployment directory is a repository
-
-From the existing `tail-trails` directory, create backups while the current database is still running:
+Before switching a live deployment, back up the old installation while its database is running:
 
 ```bash
-cd /path/to/tail-trails
-
+cd /path/to/old/tail-trails
 docker compose exec -T db sh -c \
   'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  > ../tailtrails-before-upgrade.sql
-
-tar -czf ../tailtrails-uploads-before-upgrade.tar.gz uploads
-cp .env ../tailtrails-env-before-upgrade
+  > ../tailtrails-before-baseline.sql
+tar -czf ../tailtrails-uploads-before-baseline.tar.gz uploads
+cp .env ../tailtrails-env-before-baseline
 docker compose down
 ```
 
-Extract the new archive into a temporary staging directory:
+Extract this ZIP into a **new parent directory** and configure its `.env`. You may copy the old `.env` as a starting point, then compare it with the new `.env.example`. Start from the new `tail-trails/` directory using the fresh-install commands above. Leave the old data folders untouched. If both installations must run simultaneously, use different Compose project names and host ports.
 
-```bash
-stage_dir=$(mktemp -d)
-unzip /path/to/Tail_Trails_Django_PostgreSQL_Prototype.zip -d "$stage_dir"
-```
-
-Preview the application-file replacement. The excluded persistent paths must not appear as deletions:
-
-```bash
-rsync -avhn --delete \
-  --exclude='.env' \
-  --exclude='.git/' \
-  --exclude='uploads/' \
-  --exclude='postgres-data/' \
-  --exclude='data/' \
-  "$stage_dir/tail-trails/" ./
-```
-
-After reviewing the dry run, apply the same synchronization without `-n`:
-
-```bash
-rsync -avh --delete \
-  --exclude='.env' \
-  --exclude='.git/' \
-  --exclude='uploads/' \
-  --exclude='postgres-data/' \
-  --exclude='data/' \
-  "$stage_dir/tail-trails/" ./
-
-docker compose config
-docker compose build --no-cache app cleanup
-docker compose up -d --force-recreate
-docker compose ps
-docker compose logs --tail=100 app
-curl http://127.0.0.1:${TAILTRAILS_PORT:-8000}/healthz
-```
-
-Container startup applies database migrations automatically. Confirm the current shelter migrations with `docker compose exec app python manage.py showmigrations shelter`. Direct `unzip -o` extraction is not recommended because it can leave obsolete application files behind.
+To return to the earlier installation, stop the new services and run the earlier build against its own original folders/backups. The backup SQL is for that earlier build; it is not an import path into this baseline.
 
 ## Demo accounts
 
-All demonstration accounts use password `Trail123!`.
+All demo accounts use password `Trail123!`:
 
 | Role | Email |
 | --- | --- |
@@ -108,205 +63,129 @@ All demonstration accounts use password `Trail123!`.
 | Employee | `employee@tailtrails.test` |
 | Volunteer | `volunteer@tailtrails.test` |
 
-## Photo gallery
+Demo animals use current choices, metric values and complete required medical fields. Their remote example photos have no retained local originals. Secure or replace demonstration accounts before real use. A Django backend superuser can be created separately with `docker compose exec app python manage.py createsuperuser`.
 
-Each animal has an ordered `AnimalPhoto` collection rather than a JSON photo list. Animal profiles provide:
+## Roles and animal records
 
-- A main photograph with clickable thumbnails
-- Visible previous/next controls on the public profile
-- Full-screen viewing
-- Previous/next buttons and keyboard-arrow navigation
-- Accurate photo counts
-- Staff upload, removal, and primary-cover selection controls
-- Aggregate upload progress for all selected photos, with screen-reader announcements
-- Per-photo original-file downloads for Employees and Administrators
-- A maximum of five official photographs
-- Approval-time replacement selection when volunteer photos would exceed the limit
+Public visitors can search available, non-archived profiles and browse galleries. Volunteers submit observations and candidate photos for staff review and track their own submissions. Employees and Administrators maintain official records and volunteer activities. Administrators additionally manage users, branding, total-hour adjustments, system information and permanent animal deletion.
 
-Volunteer uploads are candidate photos rather than reserved gallery slots. Volunteers can track their own pending, approved, and rejected submissions, including photo previews and rejection reasons. Staff review displays both the submitted candidates and the current official gallery, can approve only a subset of candidates, and can select official photos to remove. Every approval locks and rechecks the animal's current gallery, so earlier approvals from other pending submissions cannot cause the five-photo limit to be exceeded.
+Animal forms enforce these rules in both the browser and server:
 
-Staff and volunteer photo uploads use a two-stage workflow. The complete multipart upload first stores private pending originals. Only after that upload succeeds does Tail Trails open the crop workspace for every uploaded image. The full image stays fixed at a practical display size while an independent 3×3 crop rectangle moves and resizes over it. Landscape and portrait controls change the locked selection ratio without resizing the displayed image. Finalization retains the exact source under `uploads/private-originals/` and creates an exact-ratio progressive JPG under the corresponding `web/` folder. Pending batches never appear publicly or consume official gallery positions.
+| Field/selection | Behavior |
+| --- | --- |
+| Stray intake | Show and require Intake location |
+| Owner Surrender intake | Show Previous owner |
+| Kennel | Require Kennel location and Kennel ID |
+| Foster Home | Require foster phone and address; caregiver name is optional |
+| Has Microchip | Require the ID when checked; otherwise gray/disable only the ID area |
+| Nursing | Require litter size and date of birth |
+| Dog or Cat | Show optional Yes/No/Unknown leash skills |
+| Fleas | Required Positive/Negative selection; initially blank |
+| Heartworm | Required Positive/Negative/Unknown selection; initially blank |
 
-Animal-photo inputs accept JPG, PNG, HEIC, and HEIF. HEIC/HEIF sources are decoded by `pillow-heif`, retained unchanged for authorized original-file downloads, and converted through the same optimized web-JPG pipeline as other formats. The server validates both the supported filename extension and the decoded image because some browsers label HEIC/HEIF uploads as generic binary data.
+Intake types are Stray, Owner Surrender, Animal Control, Transfer, Seizure and Other. Spay/neuter choices are Spayed/Neutered, Not Spayed/Neutered, Nursing and Unknown. Vaccination status offers Up to Date/In Progress/Unvaccinated or blank, plus notes. House trained offers Yes/No/Unknown or blank. Breed and coat pattern support multiple suggestion chips and custom values, with counts and an explicit no-match state. Color checkboxes are Black, White, Blue/Gray, Red/Orange, Tan, Cream, Brown and Silver. Coat length is Short/Medium/Long or blank.
 
-Each photo may be up to 25 MiB by default (`MAX_PHOTO_SIZE_MB`). The complete application request limit defaults to 160 MiB (`MAX_REQUEST_SIZE_MB`), which accommodates five maximum-sized photos plus multipart-form overhead. Any reverse proxy in front of the app must allow at least the same request size. The included Nginx example sets `client_max_body_size 160m`; confirm any Apache request-body policy also permits at least 160 MiB. Reload the active proxy after changing its configuration and rebuild the app with `docker compose up --build` after changing `.env`.
+Age uses Weeks/Months/Years with one decimal place. Weight is kg to 0.001 and height is cm to 0.1. Unsigned text controls reject negative typing/pastes without scroll-wheel increments; server validation also rejects negative submissions. Age, measurements and entered Total Hours permit zero. Nursing litter size must be at least 1; an activity must be at least 0.01 hours. The stored manual hour adjustment remains signed to support downward total corrections.
 
-The configured width and height are treated as the long and short edges. With the defaults, landscape crops become 1600×1200 and portrait crops become 1200×1600. EXIF rotation is applied before cropping, and the image is never stretched. New uploads fill the configured aspect ratio through the administrator- or volunteer-selected crop, without letterboxing or blurred edge fill. Quality can be adjusted with `PHOTO_WEB_QUALITY`. Cards and public galleries use only the optimized JPG. The private source path is blocked from the public media route; authorized staff can download originals through the Django administration backend.
+Retired fields and compatibility routes are absent from this schema. There is no custom administrator activity log or per-animal change history.
 
-Crop batches default to a fixed 30-minute lifetime beginning after upload success (`PHOTO_BATCH_TTL_MINUTES`). The page displays a server-synchronized countdown in real time and supports resuming an unfinished batch from the animal editor or volunteer form. Cancelling deletes pending files immediately. Expired sessions are rejected at their exact deadline even if physical cleanup has not run yet. A dedicated `cleanup` Compose service runs every 60 minutes by default (`PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES`), while application startup and new-batch creation also perform cleanup. The service shares the existing `uploads/` bind mount and PostgreSQL database; it exposes no port and uses no named Docker volume.
+## Deceased status, archive and deletion
 
-Container startup also runs `python manage.py reprocess_photos`. This one-time-safe backfill converts photos stored by earlier prototype versions, treating the preexisting file as the retained original.
+Employees and Administrators select **Deceased** in the normal status dropdown. Saving requires a reason, an acknowledgement checkbox and the signed-in user's current password. The reason, actor and time are retained on the animal. Model checks and PostgreSQL/SQLite triggers prevent reversing that confirmation, while other details remain editable. Django's backend does not offer a bypass for confirming or reversing this status.
 
-To regenerate legacy web images from retained originals, run:
+**Archive this record** is reversible and separate from status. Archived animals disappear from normal searches, homepage features and public pages. Staff can tick **Include archived records**, open the record and restore it. Volunteers cannot start contributions to archived records; their existing submission outcomes remain accessible.
+
+Only Administrators see the distinct red **Delete animal record…** action next to Cancel/Save. A second page requires acknowledgement and password. Deletion removes the animal, submissions, gallery associations and pending batches in a transaction, then removes unshared image files after commit. Files referenced elsewhere are preserved. Direct Django backend deletion is disabled. Use Archive when the record should be retained. A permanent deceased status cannot be reversed, but an Administrator can deliberately delete the whole record through this protected workflow.
+
+## Animal photos and cropping
+
+Official galleries allow five photos, primary-cover selection, clickable thumbnails, previous/next controls and a large-image view with keyboard navigation. Image management cards use bounded 4:3 thumbnails; missing files show styled placeholders.
+
+Animal uploads accept JPG, PNG, HEIC and HEIF, with extension and decoded-content validation. A complete multipart upload succeeds before opening cropping for every uploaded image. A fixed, uniformly scaled preview has a movable/resizable 3×3 crop selection, locked to the selected landscape/portrait ratio. Mouse, pen, touch and keyboard controls are supported. Finalization retains the exact original filename/bytes privately and creates a progressive web JPG without letterboxing. There is one crop-based image pipeline; no blurred-fill conversion or historical photo-backfill command is included.
+
+Defaults are 1600×1200 landscape / 1200×1600 portrait, 25 MiB per file and 160 MiB per complete request. The configured width/height are treated as long/short edges. EXIF rotation is applied before cropping. Employees and Administrators can download each retained original from the animal editor; public media access blocks private original paths.
+
+File selection reports count/combined size. Save shows aggregate byte progress, then processing status. Corrected retries retain progress behavior. Selection is disabled at five official photos; selecting too many files before reaching five still produces a server validation error.
+
+A crop batch lasts 30 minutes by default and displays a server-synchronized countdown. Cancellation removes pending files immediately; expiration rejects finalization at the deadline even before physical cleanup. Startup, opportunistic new-batch checks and a cleanup service remove expired batches. `PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES` defaults to 60. To clean expired batches immediately:
 
 ```bash
-docker compose exec app python manage.py reprocess_photos --all
+docker compose exec app python manage.py cleanup_photo_batches
 ```
 
-Only photos with retained originals are regenerated. This legacy maintenance command does not invent interactive crop coordinates; remote demonstration-image URLs are left unchanged.
+## Volunteer submissions and hours
 
-Demonstration records use remote genuine-animal photographs, so seeded records have no local original unless a staff member replaces or adds a photo.
+Candidate photos do not reserve official gallery slots. Volunteers can submit up to five candidates and see Pending/Approved/Rejected outcomes, previews and rejection reasons in **My submissions**. Staff review displays candidates beside current official photos. Reviewers choose candidates to add and official photos to replace. Approval locks/rechecks the current animal gallery inside a transaction, preventing multiple submissions from exceeding five official photos.
+
+**Displayed Total Hours = recorded activity sum + manual adjustment.** Administrators replace Total Hours in **Manage users → Edit**; the adjustment becomes entered total minus recorded sum. Activity entries remain unchanged. Employees and Administrators can add/edit/delete activities; deletion has a separate acknowledgement page. Later activity changes preserve the adjustment. Consequently, deleting activities after a downward adjustment can yield a negative calculated total; the system does not silently rewrite the adjustment or clamp the calculation.
+
+Changing Volunteer to Employee/Administrator preserves entries and adjustment but hides Volunteer Hours for that account. Restoring Volunteer reveals the preserved total. Total replacement is enabled only for Volunteer accounts.
 
 ## Organization branding
 
-Organization settings provides explicit format and size guidance, native file-picker restrictions, fixed-image crop previews, movable and aspect-locked 3×3 selections, and synchronized visual/hex color inputs. Logo and favicon selections remain square; the banner selection uses the configured banner ratio. The browser sends normalized crop coordinates; Pillow applies the authoritative crop to the retained original, so the browser preview never becomes the saved source.
+Branding uses synchronized color pickers/hex values and the shared fixed-image crop selector. Logo and favicon require square crops; banner uses its configured ratio. Non-square sources are uniformly scaled, never squished.
 
-All crop selectors use Pointer Events, so the same move and corner-resize interaction works with a mouse, pen, or touchscreen. The selection can also be moved with the arrow keys, moved faster with Shift+Arrow, and resized around its center with `+` and `-`. The crop cannot leave the image, and the server validates the target ratio again before generating the final asset.
+| Asset | Accepted formats | Output |
+| --- | --- | --- |
+| Logo | JPG/PNG | 512×512 PNG with transparency |
+| Banner | JPG/PNG/HEIC/HEIF | 1920×640 progressive JPG by default |
+| Favicon | JPG/PNG | 32×32 and 180×180 PNG variants |
 
-Branding preview uploads and final image saves report byte progress. Selecting an image or changing a crop starts an image-editing countdown using `PHOTO_BATCH_TTL_MINUTES` (30 minutes by default). The server rejects expired image edits. Name/color-only edits do not start this timer. Preview uploads return decoded bytes without storing pending assets: discard or closing the page drops browser selections, and there are no abandoned preview files for the cleanup worker to delete. Existing saved branding stays in place until Save succeeds. Discard resets the image session and reloads saved settings.
+Preview/final uploads show progress. Image changes start the configured crop-session timer; name/color-only edits do not. Preview responses create no stored pending assets. Discard drops browser selections; saved settings change only after Save succeeds. Originals are retained privately when saved. Browser-icon fallback is dedicated favicon, then logo, then a color-matched heart. Generated filenames change with branding content. The homepage banner has a dark overlay for text readability.
 
-Existing photos on the animal editor use bounded 4:3 management cards. The grid keeps a single photo at a practical thumbnail size instead of stretching it across the available row, while still fitting multiple photos efficiently and collapsing to one responsive column on narrow screens. Crop-session actions are separated from the final crop card with a consistent action gutter.
+## Environment and reverse proxy
 
-- Logos accept JPG or PNG, retain the source privately, and generate a 512 x 512 PNG. The square crop preserves transparency.
-- Homepage banners accept JPG, PNG, HEIC, or HEIF, retain the source privately, and generate a progressive JPG. The default 1920 x 640 output is configurable with `BRANDING_BANNER_WIDTH`, `BRANDING_BANNER_HEIGHT`, and `BRANDING_WEB_QUALITY`.
-- Favicons accept JPG or PNG and use the same square crop interface. Optimized 32 x 32 and 180 x 180 PNG variants use content-derived filenames so browsers receive a fresh URL whenever branding changes.
-- Branding sources default to a 25 MiB limit controlled by `BRANDING_MAX_SIZE_MB`.
+See `.env.example` for the complete supported configuration. Important controls include:
 
-The public homepage displays the generated banner beneath a dark readability overlay. If no dedicated favicon is uploaded, the processed logo is used; if neither image exists, Tail Trails generates a high-contrast heart using the primary organization color. HEIC/HEIF crop previews are decoded by an administrator-only Django endpoint because browser support for those formats is inconsistent. Existing branding files are retained as source references during the database migration and can be replaced or recropped through Organization settings.
+| Variables | Purpose |
+| --- | --- |
+| `TAILTRAILS_PORT`, `TAILTRAILS_UID`, `TAILTRAILS_GID` | Host port and local folder ownership |
+| `PHOTO_WEB_WIDTH`, `PHOTO_WEB_HEIGHT`, `PHOTO_WEB_QUALITY` | Animal web output |
+| `MAX_PHOTO_SIZE_MB`, `MAX_REQUEST_SIZE_MB` | Per-file and complete request size |
+| `PHOTO_BATCH_TTL_MINUTES`, `PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES` | Crop lifetime and expired-file cleanup |
+| `BRANDING_LOGO_SIZE`, `BRANDING_BANNER_WIDTH`, `BRANDING_BANNER_HEIGHT` | Branding output dimensions |
+| `BRANDING_WEB_QUALITY`, `BRANDING_MAX_SIZE_MB` | Branding JPG quality and upload size |
 
-The sign-in page presents the prototype password in monospace for easier transcription. Photo forms preserve aggregate upload progress after a server-side validation response, so correcting an over-capacity selection and submitting again does not require a page refresh.
+Compose exposes only `127.0.0.1:${TAILTRAILS_PORT}:8000` and `[::1]:${TAILTRAILS_PORT}:8000`. PostgreSQL is not published. Apache and Nginx examples host the root of a dedicated HTTPS subdomain, redirect HTTP to HTTPS and set HSTS at the proxy. Replace the example hostname/certificate paths. Set `TRUSTED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and `COOKIE_SECURE=true` for HTTPS deployment. The proxy must preserve host and `X-Forwarded-Proto`, allow the 160 MiB request default, disable SSE buffering and permit the configured long upstream timeout.
+
+A same-host proxy uses the loopback port. A containerized proxy should share the Compose network and use `http://app:8000`. Django leaves HTTPS redirect/HSTS disabled by default to avoid duplicating proxy policy. Optional custom URL-prefix support remains available for deployments that need it.
 
 ## Administrator system information
 
-Administrators have a **System information** page in the Administration navigation. It provides a request-time operational snapshot containing:
+The read-only page reports build/runtime versions, timezone, database health/latency/schema, upload folder capacity, image settings, CPU model/count/load, uptime, process memory, RAM and swap. Capacity uses IEC units such as GiB and TiB. Values are container-visible and may reflect host-kernel or cgroup limits.
 
-- The build number from `VERSION`, Python version, Django version, and configured time zone
-- Database connectivity, response time, engine, and most recently applied migration
-- The configured upload-data path and its total, used, and free filesystem capacity
-- Web-image dimensions, JPEG quality, per-file limit, request limit, and gallery capacity
-- Container-visible operating system, CPU model, logical CPUs, 1/5/15-minute load averages, kernel uptime, process ID, process resident memory, RAM use, and swap use
+Authenticated Server-Sent Events replace snapshot cards without a full reload. The refresh menu offers 1/2/5 seconds, default 5, retained in the URL. It pauses in hidden tabs, reconnects after interruption and has a static fallback without JavaScript. Secrets and uploaded contents are excluded.
 
-Storage and memory quantities use IEC binary units (`KiB`, `MiB`, `GiB`, `TiB`, and `PiB`) so labels match their 1024-based calculations.
+## Development and collaboration
 
-The browser opens an authenticated Server-Sent Events connection and replaces only the snapshot cards when fresh data arrives; it does not reload the page. Administrators can select a 1-, 2-, or 5-second update frequency from the page header, with 5 seconds as the default. The selected interval is retained in the page URL. The stream pauses while the tab is hidden, reconnects automatically after interruptions, and falls back to a static snapshot when JavaScript is unavailable.
+See `CONTRIBUTING.md` for project structure and contribution checks, and `GIT_WORKFLOW.md` for ZIP imports, branches, tags and deployment. `VERSION` is the single application build number used by health/UI/cache keys and the PDF generator.
 
-The page is restricted to Administrators. It does not display secrets, database passwords, environment values, or uploaded-file contents. RAM and swap prefer cgroup values when numeric container limits are available and otherwise fall back to kernel-visible `/proc` values. Disabled or unavailable swap is identified explicitly. Server usage figures are snapshots from the application container and may represent container limits or host-kernel values depending on the deployment.
-
-## Reverse proxy
-
-The app trusts one proxy layer for scheme and host information and continues to recognize `X-Forwarded-Prefix` for custom deployments. The included `nginx.example.conf` and `apache.example.conf` instead demonstrate the simpler recommended layout: publish Tail Trails at the root of the dedicated HTTPS subdomain `tailtrails.exampleshelter.com`. Both examples redirect HTTP to HTTPS, use the same Let's Encrypt certificate paths, preserve the original host, set HSTS at the proxy, and forward to the loopback-only application port. Replace the example domain and certificate paths before deployment.
-
-Compose publishes the Uvicorn ASGI service only on the host loopback interfaces: `127.0.0.1:${TAILTRAILS_PORT}:8000` and `[::1]:${TAILTRAILS_PORT}:8000`. The host-side port remains configurable through `TAILTRAILS_PORT` in `.env`, while remote hosts cannot connect directly to Uvicorn. A reverse proxy running on the same host should use `http://127.0.0.1:${TAILTRAILS_PORT}` as its upstream. A reverse proxy running in another container cannot use the host loopback mapping; attach it to the Compose network and use `http://app:8000` instead. The SSE response disables buffering and both examples allow a 600-second upstream timeout.
-
-For the example subdomain, configure `.env` with `TRUSTED_HOSTS=tailtrails.exampleshelter.com`, `CSRF_TRUSTED_ORIGINS=https://tailtrails.exampleshelter.com`, and `COOKIE_SECURE=true`. Apache deployments require the SSL, headers, rewrite, proxy, proxy HTTP, and HTTP/2 modules used by `apache.example.conf`.
-
-For HTTPS deployment:
-
-1. Set `TRUSTED_HOSTS=shelter.example.org`.
-2. Set `CSRF_TRUSTED_ORIGINS=https://shelter.example.org`.
-3. Set `COOKIE_SECURE=true` so browsers never transmit session and CSRF cookies over plain HTTP.
-4. Configure HTTP-to-HTTPS redirection and the HSTS response header at the reverse proxy. The Django application leaves both disabled by default to avoid duplicating proxy policy.
-5. Ensure the proxy sends `X-Forwarded-Proto`; Django uses it to recognize the original request as HTTPS.
-6. Use a strong, unique `SECRET_KEY` and database password.
-7. Keep PostgreSQL unexposed; only the application service needs to reach it.
-
-## Permanent deceased status and record archives
-
-Employees and administrators select **Deceased** in the animal's status dropdown when creating or editing a profile. Selecting it reveals a required reason, a permanent-change acknowledgement, and the signed-in user's current-password field. Saving requires all three and records the reason, confirming user and timestamp. Once confirmed, the status, reason and confirmation details cannot be changed through model saves or database updates; PostgreSQL and SQLite triggers protect them. Other profile details can still be maintained. Django administration directs users to the application form for this confirmation.
-
-Migration 0009 converts existing Euthanized records to Deceased without losing their confirmation timestamps or users. Those legacy records receive the reason "Previously recorded as euthanized." New confirmations require a reason supplied by staff. New-profile creation supports records with or without photos; photo uploads continue into the crop workflow after the record saves. Invalid forms display a prominent linked error summary and retain entered values, so validation failures cannot look like a successful save.
-
-Archiving is separate and reversible: toggle **Archive this record** on the edit page and save. Archived animals disappear from normal searches, homepage features, and public profiles even if their adoption status is Available. Employees and administrators can tick **Include archived records** in animal search, open an archived record, and restore it by clearing the archive checkbox. Sorting preserves the archive filter. Volunteers cannot browse archived profiles or start new submissions for them; existing submission history remains available for review. Restoring an archive never reverses a confirmed deceased status. Records created before archiving was introduced default to unarchived; existing confirmations are preserved.
-
-## Validation and scope changes in build 2026.11.17.1
-
-Fleas and Heartworm status are mandatory on new and edited animal profiles. Both start blank and show an asterisk; staff must explicitly select a value before saving. Heartworm allows Positive, Negative or Unknown; Fleas allows Positive or Negative. Existing blank values are not assigned invented medical results during upgrade; staff must fill them on their next edit.
-
-Animal age, weight, height, nursing litter size, volunteer activity hours and administrator-entered Total Hours use unsigned input controls. Minus signs and invalid pastes are blocked in the browser, scroll-wheel movement cannot increment these text inputs, and server validation rejects negative submissions even when JavaScript is bypassed. Age, weight, height and entered Total Hours permit zero; nursing litter size must be at least 1, and an activity must be at least 0.01 hours. Existing metric precision is preserved.
-
-The experimental administrative Activity log and per-animal Change history are removed, including collection signals, middleware, export routes, navigation and audit-retention configuration. Migration `0014_remove_history_require_medical_statuses` deletes the two obsolete log tables and their stored entries; back up the database before upgrading if those experimental records need to be retained externally. Existing `AUDIT_*` lines in a deployment's `.env` are unused and can be removed. The prior migration files stay in the package so existing installations can upgrade normally. Migration 0014 reinstalls the deceased-status trigger after schema changes, including SQLite table rebuilds. Animal records, photos, submissions, deceased confirmation details, volunteer activities and manual adjustments remain intact.
-
-## Volunteer totals and activity corrections
-
-**Displayed Total Hours = sum of recorded activity hours + manual adjustment.** Administrators use **Manage users → Edit → Total Hours** to replace a Volunteer account's total. The adjustment becomes the entered total minus the recorded sum. This never edits or deletes activity entries. For example, an activity sum of 8 hours with an entered total of 20 stores a +12 adjustment. Editing an activity from 5 to 7 hours then raises the displayed total to 22 while keeping the +12 adjustment.
-
-Employees and Administrators can add, edit or delete individual activities from **Volunteer hours**. Deletion opens a separate acknowledgement page. These operations change only the recorded sum and preserve the adjustment. As a result, deleting activities after a downward total adjustment can produce a negative calculated total; no hidden clamping or adjustment rewrite occurs.
-
-When a Volunteer becomes an Employee or Administrator, all historical activity entries and the manual adjustment remain stored. Volunteer Hours disappear from that account's displays and from the volunteer-management list. Restoring the Volunteer role makes the preserved total visible again. The Total Hours replacement control is available only for a Volunteer account.
-
-## Permanent animal deletion
-
-Only Administrators see **Delete animal record…** beside the animal editor's Cancel/Save controls. It opens a separate confirmation page requiring an explicit acknowledgement checkbox and the signed-in administrator's current password. A GET, missing acknowledgement or incorrect password cannot delete a record. The Django administration backend disables its direct deletion shortcut so it cannot bypass this workflow.
-
-Successful deletion removes the animal, related submissions, photo associations and pending crop batches in one database transaction. Unshared image files are removed after commit; files still referenced by another record are preserved. Confirmed Deceased records can also be deliberately deleted by this administrator-only workflow; the permanence rule prevents changing their status back, rather than forbidding record deletion. Use Archive when the record should be retained.
-
-## Structured animal intake and care fields
-
-The status and archive controls share a stable row; the conditional Deceased confirmation appears below that row. All conditional rules are enforced on the server as well as in the browser.
-
-| Selection | Form behavior |
-| --- | --- |
-| Intake type: Stray | Intake location appears and is required. It is hidden and disabled for other intake types. Found by is removed from the form. |
-| Intake type: Owner Surrender | Show Previous owner immediately after Intake type; hide it otherwise. |
-| Held at: Kennel | Show and require Kennel location and Kennel ID. |
-| Held at: Foster Home | Show and require foster phone and address; caregiver name remains optional. Contact details appear only in restricted staff records. |
-| Has Microchip | Checkbox and ID share one panel. Enable and require the ID when checked; otherwise visibly grey and disable it and clear the saved ID. |
-| Spay/neuter: Nursing | Show and require both litter size and litter date of birth. |
-| Species: Dog or Cat | Show optional leash skills. Hide and disable it for other species. |
-
-Intake options are Stray, Owner Surrender, Animal Control, Transfer, Seizure and Other. Age units are Weeks, Months and Years; age sorting compares normalized durations. Spay/neuter choices are Spayed/Neutered, Not Spayed/Neutered, Nursing and Unknown. Vaccination status offers Up to Date, In Progress and Unvaccinated, with optional notes and a blank initial choice. Heartworm offers Positive, Negative and Unknown; fleas offers Positive and Negative. Both are required and initially blank. House trained and leash skills offer Yes, No and Unknown, initially blank. Coat length is Short, Medium or Long, initially blank. Weight is in kg to three decimal places (grams), and height in cm to one decimal place (millimeters).
-
-Breed and coat-pattern suggestions appear immediately with a live matching/total count. Search filters the chips. When no suggestion matches, an explicit empty-state message and an **Add** button let staff select their typed custom value. Multiple values can be selected and removed. Breed pools contain 30 suggestions per species for dogs and cats; rabbit/other breeds can be entered directly. These are practical intake suggestions, not an authoritative population ranking or breed identification. Reference pools: [AKC popular breeds](https://www.akc.org/most-popular-breeds/) and [CFA popular pedigreed breeds](https://cfa.org/cat-talk/most-popular-breeds-for-2024/), supplemented with domestic coat-length types and mixed breeds. Coat-color checkboxes are Black, White, Blue/Gray, Red/Orange, Tan, Cream, Brown and Silver. Multiple colors can be searched individually; no selection means not recorded, without Unknown or Other checkboxes.
-
-Migration 0010 maps prior spay/neuter terms, marks existing microchip IDs as present, and separates known legacy patterns from colors. It preserves ambiguous prior medical/behavior values in vaccination notes or staff notes rather than treating old “Vaccinated” text as proof of current vaccination. Existing foster records are not assigned fabricated contact details; required missing information must be supplied on their next edit. Retired energy-level, spay-note and flea-prevention columns are retained for data preservation but removed from forms and profile displays. Permanent Deceased confirmation data stays protected through the migration. Demo seeding now creates missing records only and never overwrites staff edits or archived/permanent statuses.
-
-Migration 0011 merges Blue/Gray and Red/Orange aliases and preserves retired color names in staff notes. Legacy weights are converted from pounds to kg, and size classifications use the metric values. Old heights had no defined unit: their original values are preserved in staff notes and the cm field is cleared for verification rather than assigning an assumed unit. Permanent confirmation data remains protected. Disabled controls use an explicit gray background and readable gray text.
-
-## Local development and tests
-
-Form layout refinements keep conditional intake location and foster phone rows full width, and gray only the ID area inside the microchip panel. Color-grid styling is scoped to its container so native checkboxes remain visible and selectable. Age, litter size, weight, height, activity hours and entered Total Hours use unsigned text controls with numeric keyboard hints: scroll-wheel movement does not change values, minus signs and invalid pastes are blocked in the browser, and server validation also rejects negative values. Spay/neuter choices put Unknown last. Migration 0012 records that choice ordering without changing stored statuses.
-
-PostgreSQL is used in Compose. Tests can use an isolated SQLite database for speed:
+For a new local development database:
 
 ```bash
 python3.14 -m venv .venv
 . .venv/bin/activate
 python -m pip install --require-hashes -r requirements.lock
-DB_ENGINE=sqlite python manage.py migrate
+DB_ENGINE=sqlite python manage.py initialize_database
 DB_ENGINE=sqlite python manage.py seed_demo
 DB_ENGINE=sqlite python manage.py runserver
 ```
 
-Run the automated tests:
+Checks:
 
 ```bash
 DB_ENGINE=sqlite python manage.py test
+DB_ENGINE=sqlite python manage.py makemigrations --check --dry-run
+node tests/test_unsigned_inputs.js  # Optional; requires Node.js
 ```
 
-The tests cover public visibility, role boundaries, gallery rendering, two-stage multi-image cropping, fixed-image 3×3 crop selectors, exact-ratio output, resumable deadlines, cancellation, expired-file cleanup, volunteer approval, branding crops and retained originals, HEIC previews, color controls, upload retries, CPU/swap diagnostics, the administrator SSE stream, ASGI configuration, dependency policy, loopback-only port publishing, reverse-proxy examples and prefixes, and health checks. Additional tests cover required medical fields, unsigned quantity inputs, removal of experimental logs, replacement hour totals and role restoration, activity edits/deletions, and password-confirmed animal deletion with post-commit file cleanup.
-
-## Regenerating the overview PDF (optional)
-
-The optional `tools/build_overview.py` script reads the build number from `VERSION`, Python from the Dockerfile, and Django from the lock file. Its ReportLab dependency is needed only to generate the document, not to run or deploy Tail Trails:
+`requirements.in` defines compatible dependency series; `requirements.lock` pins exact versions/hashes. Refresh compatible patches deliberately, review and rerun tests before a release. The Docker Python base is also pinned for reproducibility. `tools/build_overview.py` optionally builds the overview using ReportLab, which is not an application dependency:
 
 ```bash
 python -m pip install reportlab
 python tools/build_overview.py --output /path/to/Tail_Trails_Architecture_Overview.pdf
 ```
 
-Review the narrative for feature changes, regenerate, and visually inspect the PDF for each release. Pass `--verified-tests N` only after actually running that release's tests. The optional input-interaction check can be run with `node tests/test_unsigned_inputs.js` if Node.js is installed.
+Review its narrative for each release and pass `--verified-tests N` only after actually running that release's tests.
 
-## Dependency update policy
-
-`requirements.in` defines the supported feature series for direct dependencies. `requirements.lock` records the exact transitive dependency set and distribution hashes used by Docker and local testing. Docker never resolves newer packages implicitly, so rebuilding a tagged release remains reproducible.
-
-At the start of a new Tail Trails release, install [uv](https://docs.astral.sh/uv/) and intentionally refresh the lock file:
-
-```bash
-uv pip compile requirements.in \
-  --python-version 3.14 \
-  --universal \
-  --generate-hashes \
-  --output-file requirements.lock
-
-python3.14 -m venv .venv
-. .venv/bin/activate
-python -m pip install --require-hashes -r requirements.lock
-DB_ENGINE=sqlite python manage.py test
-```
-
-Review the resolved versions and test results before committing the new lock file. The Docker base image is likewise pinned to an exact Python 3.14 patch release and should be advanced deliberately during release preparation rather than changing silently during an ordinary rebuild.
-
-## Production follow-up
-
-Before operating with real shelter data, add automated PostgreSQL and upload backups, malware scanning for uploads, centralized logging, rate limiting, monitoring, email-based password recovery, and object storage if the application will run on more than one server.
+For real shelter deployment, add automated PostgreSQL/upload backups, malware scanning, rate limiting, monitoring, account recovery and shared object storage if multiple application hosts are introduced.

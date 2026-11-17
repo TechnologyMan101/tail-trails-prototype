@@ -11,3 +11,5 @@ uploads/*
 postgres-data/*
 !postgres-data/.gitkeep
 
+
+.ruff_cache/

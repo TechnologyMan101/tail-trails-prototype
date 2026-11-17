@@ -43,13 +43,6 @@ $$(photoImageSelector).forEach((photo) => {
   if (photo.complete && !photo.naturalWidth) showUnavailablePhoto(photo);
 });
 
-$$('[data-dialog-open]').forEach((button) => button.addEventListener('click', () => {
-  document.getElementById(button.dataset.dialogOpen)?.showModal();
-}));
-$$('[data-dialog-close]').forEach((button) => button.addEventListener('click', () => {
-  button.closest('dialog')?.close();
-}));
-
 const gallery = $('[data-gallery]');
 if (gallery) {
   const main = $('[data-gallery-main]', gallery);
@@ -151,7 +144,7 @@ const initializePhotoEditor = (photoEditor) => {
     setAnimalField('previous_owner', animalValue('intake_type') === 'Owner Surrender');
     const kennel = animalValue('held_at') === 'Kennel';
     const foster = animalValue('held_at') === 'Foster Home';
-    ['specific_location', 'kennel_id'].forEach((name) => setAnimalField(name, kennel, {required: true}));
+    ['kennel_location', 'kennel_id'].forEach((name) => setAnimalField(name, kennel, {required: true}));
     ['foster_phone', 'foster_address'].forEach((name) => setAnimalField(name, foster, {required: true}));
     setAnimalField('foster_caregiver', foster);
     setAnimalField('microchip', Boolean(animalValue('has_microchip')), {grey: true, required: true});

@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
@@ -24,6 +25,7 @@ class User(AbstractUser):
         ADMIN = "Administrator"
         EMPLOYEE = "Employee"
         VOLUNTEER = "Volunteer"
+
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=160)
     phone = models.CharField(max_length=20)
@@ -37,7 +39,8 @@ class User(AbstractUser):
         recorded = self.hour_entries.aggregate(total=models.Sum("hours"))["total"] or 0
         return recorded + self.manual_adjustment
 
-    def __str__(self): return self.full_name or self.username
+    def __str__(self):
+        return self.full_name or self.username
 
 
 class Organization(models.Model):
@@ -45,11 +48,15 @@ class Organization(models.Model):
     primary_color = models.CharField(max_length=7, default="#245C4A")
     secondary_color = models.CharField(max_length=7, default="#D47A45")
     logo = models.ImageField(upload_to="branding/web/", blank=True)
-    logo_original = models.FileField(upload_to="private-originals/branding/logo/", blank=True)
+    logo_original = models.FileField(
+        upload_to="private-originals/branding/logo/", blank=True
+    )
     logo_original_filename = models.CharField(max_length=255, blank=True)
     logo_crop = models.JSONField(default=dict, blank=True)
     banner = models.ImageField(upload_to="branding/web/", blank=True)
-    banner_original = models.FileField(upload_to="private-originals/branding/banner/", blank=True)
+    banner_original = models.FileField(
+        upload_to="private-originals/branding/banner/", blank=True
+    )
     banner_original_filename = models.CharField(max_length=255, blank=True)
     banner_crop = models.JSONField(default=dict, blank=True)
     favicon = models.ImageField(
@@ -57,35 +64,46 @@ class Organization(models.Model):
         blank=True,
         help_text="Optional square browser icon. When omitted, the logo or default heart mark is used.",
     )
-    favicon_original = models.FileField(upload_to="private-originals/branding/favicon/", blank=True)
+    favicon_original = models.FileField(
+        upload_to="private-originals/branding/favicon/", blank=True
+    )
     favicon_original_filename = models.CharField(max_length=255, blank=True)
     favicon_crop = models.JSONField(default=dict, blank=True)
 
     @classmethod
-    def current(cls): return cls.objects.first() or cls.objects.create()
+    def current(cls):
+        return cls.objects.first() or cls.objects.create()
 
 
 class Animal(models.Model):
     SPECIES = [(x, x) for x in ("Dog", "Cat", "Rabbit", "Other")]
-    STATUSES = [(x, x) for x in ("Available", "Pending Adoption", "Not Available", "Deceased")]
+    STATUSES = [
+        (x, x) for x in ("Available", "Pending Adoption", "Not Available", "Deceased")
+    ]
     SEXES = [(x, x) for x in ("Male", "Female", "Unknown")]
     LOCATIONS = [(x, x) for x in ("Kennel", "Foster Home")]
-    SPAY = [(x, x) for x in ("Spayed/Neutered", "Not Spayed/Neutered", "Nursing", "Unknown")]
+    SPAY = [
+        (x, x) for x in ("Spayed/Neutered", "Not Spayed/Neutered", "Nursing", "Unknown")
+    ]
     animal_id = models.CharField(max_length=20, unique=True, editable=False)
     name = models.CharField(max_length=100)
     species = models.CharField(max_length=20, choices=SPECIES)
     breed = models.TextField()
-    age = models.DecimalField(max_digits=5, decimal_places=1, validators=[MinValueValidator(0)])
-    age_unit = models.CharField(max_length=10, choices=[("Weeks", "Weeks"), ("Months", "Months"), ("Years", "Years")])
+    age = models.DecimalField(
+        max_digits=5, decimal_places=1, validators=[MinValueValidator(0)]
+    )
+    age_unit = models.CharField(
+        max_length=10,
+        choices=[("Weeks", "Weeks"), ("Months", "Months"), ("Years", "Years")],
+    )
     sex = models.CharField(max_length=10, choices=SEXES)
     intake_date = models.DateField()
     intake_type = models.CharField(max_length=50, choices=INTAKES)
     intake_location = models.CharField(max_length=120, blank=True)
-    found_by = models.CharField(max_length=160, blank=True)
     microchip = models.CharField(max_length=80, blank=True)
     has_microchip = models.BooleanField(default=False)
     held_at = models.CharField(max_length=20, choices=LOCATIONS)
-    specific_location = models.CharField("kennel location", max_length=100, blank=True)
+    kennel_location = models.CharField("kennel location", max_length=100, blank=True)
     kennel_id = models.CharField(max_length=50, blank=True)
     foster_caregiver = models.CharField(max_length=160, blank=True)
     foster_phone = models.CharField(max_length=40, blank=True)
@@ -96,130 +114,233 @@ class Animal(models.Model):
     color = models.TextField(blank=True)
     coat_pattern = models.TextField(blank=True)
     coat_type = models.CharField(max_length=50, blank=True)
-    coat_length = models.CharField(max_length=30, blank=True, choices=[(s, s) for s in ("Short", "Medium", "Long")])
-    weight = models.DecimalField("weight (kg)", max_digits=8, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(0)])
-    height = models.DecimalField("height (cm)", max_digits=6, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
+    coat_length = models.CharField(
+        max_length=30, blank=True, choices=[(s, s) for s in ("Short", "Medium", "Long")]
+    )
+    weight = models.DecimalField(
+        "weight (kg)",
+        max_digits=8,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    height = models.DecimalField(
+        "height (cm)",
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
     medical_conditions = models.TextField(blank=True)
     medications = models.TextField(blank=True)
-    vaccination_status = models.CharField(max_length=50, blank=True, default="", choices=[(s, s) for s in ("Up to Date", "In Progress", "Unvaccinated")])
+    vaccination_status = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        choices=[(s, s) for s in ("Up to Date", "In Progress", "Unvaccinated")],
+    )
     vaccination_notes = models.TextField(blank=True)
-    fleas_status = models.CharField(max_length=10, choices=[("Positive", "Positive"), ("Negative", "Negative")])
-    heartworm_status = models.CharField(max_length=50, choices=[(s, s) for s in ("Positive", "Negative", "Unknown")])
-    flea_prevention = models.CharField(max_length=20, default="Unknown")
+    fleas_status = models.CharField(
+        max_length=10, choices=[("Positive", "Positive"), ("Negative", "Negative")]
+    )
+    heartworm_status = models.CharField(
+        max_length=50, choices=[(s, s) for s in ("Positive", "Negative", "Unknown")]
+    )
     spay_status = models.CharField(max_length=20, choices=SPAY)
-    spay_notes = models.TextField(blank=True)
     litter_size = models.PositiveIntegerField(null=True, blank=True)
     litter_dob = models.DateField(null=True, blank=True)
     temperament = models.CharField(max_length=200, blank=True)
     good_with = models.CharField(max_length=200, blank=True)
-    energy_level = models.CharField(max_length=20, default="Unknown")
-    house_trained = models.CharField(max_length=20, blank=True, default="", choices=YES_NO_UNKNOWN)
-    leash_skills = models.CharField(max_length=30, blank=True, default="", choices=YES_NO_UNKNOWN)
+    house_trained = models.CharField(
+        max_length=20, blank=True, default="", choices=YES_NO_UNKNOWN
+    )
+    leash_skills = models.CharField(
+        max_length=30, blank=True, default="", choices=YES_NO_UNKNOWN
+    )
     behavior_notes = models.TextField(blank=True)
     previous_owner = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=STATUSES)
-    is_archived = models.BooleanField(default=False, help_text="Hide this record from normal search and public pages. Uncheck to restore it.")
+    is_archived = models.BooleanField(
+        default=False,
+        help_text="Hide this record from normal search and public pages. Uncheck to restore it.",
+    )
     deceased_at = models.DateTimeField(null=True, blank=True, editable=False)
-    deceased_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, editable=False, on_delete=models.PROTECT, related_name="confirmed_deceased_records")
+    deceased_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        editable=False,
+        on_delete=models.PROTECT,
+        related_name="confirmed_deceased_records",
+    )
     deceased_reason = models.TextField(blank=True, editable=False)
     public_description = models.TextField(blank=True)
     general_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta: ordering = ["name"]
+    class Meta:
+        ordering = ["name"]
 
     def save(self, *args, **kwargs):
         if self.pk:
-            previous = Animal.objects.filter(pk=self.pk).values("status", "deceased_at", "deceased_by_id", "deceased_reason").first()
+            previous = (
+                Animal.objects.filter(pk=self.pk)
+                .values("status", "deceased_at", "deceased_by_id", "deceased_reason")
+                .first()
+            )
             if previous and previous["status"] == "Deceased":
-                if self.status != "Deceased" or self.deceased_at != previous["deceased_at"] or self.deceased_by_id != previous["deceased_by_id"] or self.deceased_reason != previous["deceased_reason"]:
-                    raise ValidationError("The confirmed deceased status and confirmation details are permanent.")
+                if (
+                    self.status != "Deceased"
+                    or self.deceased_at != previous["deceased_at"]
+                    or self.deceased_by_id != previous["deceased_by_id"]
+                    or self.deceased_reason != previous["deceased_reason"]
+                ):
+                    raise ValidationError(
+                        "The confirmed deceased status and confirmation details are permanent."
+                    )
         super().save(*args, **kwargs)
 
     def clean(self):
         errors = {}
-        if self.status == "Available" and not self.public_description.strip(): errors["public_description"] = "Required when the animal is available."
-        if self.held_at == "Kennel" and (not self.specific_location or not self.kennel_id): errors["specific_location"] = "Kennel location and ID are required."
+        if self.status == "Available" and not self.public_description.strip():
+            errors["public_description"] = "Required when the animal is available."
+        if self.held_at == "Kennel" and (
+            not self.kennel_location or not self.kennel_id
+        ):
+            errors["kennel_location"] = "Kennel location and ID are required."
         if self.held_at == "Foster Home":
-            if not self.foster_phone.strip(): errors["foster_phone"] = "Foster phone number is required."
-            if not self.foster_address.strip(): errors["foster_address"] = "Foster address is required."
-        if self.intake_type == "Stray" and not self.intake_location.strip(): errors["intake_location"] = "Intake location is required for a stray."
-        if self.has_microchip and not self.microchip.strip(): errors["microchip"] = "Microchip ID is required when Has Microchip is checked."
-        if self.spay_status == "Nursing" and not self.litter_size: errors["litter_size"] = "Litter size is required for a nursing animal."
-        if self.spay_status == "Nursing" and not self.litter_dob: errors["litter_dob"] = "Litter date of birth is required for a nursing animal."
-        if errors: raise ValidationError(errors)
+            if not self.foster_phone.strip():
+                errors["foster_phone"] = "Foster phone number is required."
+            if not self.foster_address.strip():
+                errors["foster_address"] = "Foster address is required."
+        if self.intake_type == "Stray" and not self.intake_location.strip():
+            errors["intake_location"] = "Intake location is required for a stray."
+        if self.has_microchip and not self.microchip.strip():
+            errors["microchip"] = (
+                "Microchip ID is required when Has Microchip is checked."
+            )
+        if self.spay_status == "Nursing" and not self.litter_size:
+            errors["litter_size"] = "Litter size is required for a nursing animal."
+        if self.spay_status == "Nursing" and not self.litter_dob:
+            errors["litter_dob"] = (
+                "Litter date of birth is required for a nursing animal."
+            )
+        if errors:
+            raise ValidationError(errors)
 
     @property
-    def primary_photo(self): return self.photos.order_by("position", "id").first()
+    def primary_photo(self):
+        return self.photos.order_by("position", "id").first()
+
     @property
     def size_class(self):
-        if self.weight is None: return "Unknown"
+        if self.weight is None:
+            return "Unknown"
         w = float(self.weight) / 0.45359237
-        if self.species == "Dog": return "Small" if w < 25 else "Medium" if w < 60 else "Large" if w < 100 else "Extra Large"
-        if self.species == "Cat": return "Small" if w < 8 else "Medium" if w < 13 else "Large"
+        if self.species == "Dog":
+            return (
+                "Small"
+                if w < 25
+                else "Medium"
+                if w < 60
+                else "Large"
+                if w < 100
+                else "Extra Large"
+            )
+        if self.species == "Cat":
+            return "Small" if w < 8 else "Medium" if w < 13 else "Large"
         return "Unknown"
-    def __str__(self): return f"{self.name} ({self.animal_id})"
+
+    def __str__(self):
+        return f"{self.name} ({self.animal_id})"
 
 
 class AnimalPhoto(models.Model):
     animal = models.ForeignKey(Animal, related_name="photos", on_delete=models.CASCADE)
-    image = models.ImageField(upload_to="animals/web/%Y/%m/", blank=True, validators=[FileExtensionValidator(["jpg"])])
-    original_image = models.FileField(upload_to="private-originals/animals/%Y/%m/", blank=True)
+    image = models.ImageField(
+        upload_to="animals/web/%Y/%m/",
+        blank=True,
+        validators=[FileExtensionValidator(["jpg"])],
+    )
+    original_image = models.FileField(
+        upload_to="private-originals/animals/%Y/%m/", blank=True
+    )
     original_filename = models.CharField(max_length=255, blank=True)
     external_url = models.URLField(blank=True)
     caption = models.CharField(max_length=180, blank=True)
     position = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    class Meta: ordering = ["position", "id"]
+
+    class Meta:
+        ordering = ["position", "id"]
+
     @property
-    def url(self): return self.image.url if self.image else self.external_url
+    def url(self):
+        return self.image.url if self.image else self.external_url
+
     @property
-    def has_original(self): return bool(self.original_image)
+    def has_original(self):
+        return bool(self.original_image)
+
     def clean(self):
-        if not self.image and not self.external_url: raise ValidationError("A photo file or URL is required.")
+        if not self.image and not self.external_url:
+            raise ValidationError("A photo file or URL is required.")
 
 
 class PhotoUploadBatch(models.Model):
     class Workflow(models.TextChoices):
         STAFF = "staff", "Staff gallery"
         VOLUNTEER = "volunteer", "Volunteer submission"
+
     class Status(models.TextChoices):
         PENDING = "pending_crop", "Pending crop"
         FINALIZING = "finalizing", "Finalizing"
         COMPLETED = "completed", "Completed"
-        CANCELLED = "cancelled", "Cancelled"
-        FAILED = "failed", "Failed"
-        EXPIRED = "expired", "Expired"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="photo_upload_batches", on_delete=models.CASCADE)
-    animal = models.ForeignKey(Animal, related_name="photo_upload_batches", on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="photo_upload_batches",
+        on_delete=models.CASCADE,
+    )
+    animal = models.ForeignKey(
+        Animal, related_name="photo_upload_batches", on_delete=models.CASCADE
+    )
     workflow = models.CharField(max_length=20, choices=Workflow.choices)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
     submission_data = models.JSONField(default=dict, blank=True)
     make_primary = models.BooleanField(default=False)
     expires_at = models.DateTimeField(default=default_photo_batch_expiry, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta: ordering = ["-created_at"]
-    @property
-    def is_expired(self): return timezone.now() >= self.expires_at
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class PendingPhoto(models.Model):
-    batch = models.ForeignKey(PhotoUploadBatch, related_name="photos", on_delete=models.CASCADE)
+    batch = models.ForeignKey(
+        PhotoUploadBatch, related_name="photos", on_delete=models.CASCADE
+    )
     original = models.FileField(upload_to=pending_photo_path)
     original_filename = models.CharField(max_length=255)
     position = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    class Meta: ordering = ["position", "id"]
+
+    class Meta:
+        ordering = ["position", "id"]
 
 
 class Submission(models.Model):
     STATUS = [(x, x) for x in ("Pending", "Approved", "Rejected")]
-    animal = models.ForeignKey(Animal, related_name="submissions", on_delete=models.CASCADE)
+    animal = models.ForeignKey(
+        Animal, related_name="submissions", on_delete=models.CASCADE
+    )
     user = models.ForeignKey(User, related_name="submissions", on_delete=models.PROTECT)
     observations = models.TextField(blank=True, max_length=1000)
     temperament = models.CharField(max_length=200, blank=True)
@@ -227,25 +348,48 @@ class Submission(models.Model):
     notes = models.TextField(blank=True, max_length=500)
     status = models.CharField(max_length=20, choices=STATUS, default="Pending")
     rejection_reason = models.TextField(blank=True)
-    reviewed_by = models.ForeignKey(User, null=True, blank=True, related_name="reviewed_submissions", on_delete=models.PROTECT)
+    reviewed_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        related_name="reviewed_submissions",
+        on_delete=models.PROTECT,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
-    class Meta: ordering = ["-created_at"]
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class SubmissionPhoto(models.Model):
-    submission = models.ForeignKey(Submission, related_name="photos", on_delete=models.CASCADE)
-    image = models.ImageField(upload_to="submissions/web/%Y/%m/", blank=True, validators=[FileExtensionValidator(["jpg"])])
-    original_image = models.FileField(upload_to="private-originals/submissions/%Y/%m/", blank=True)
+    submission = models.ForeignKey(
+        Submission, related_name="photos", on_delete=models.CASCADE
+    )
+    image = models.ImageField(
+        upload_to="submissions/web/%Y/%m/",
+        blank=True,
+        validators=[FileExtensionValidator(["jpg"])],
+    )
+    original_image = models.FileField(
+        upload_to="private-originals/submissions/%Y/%m/", blank=True
+    )
     original_filename = models.CharField(max_length=255, blank=True)
 
 
 class VolunteerHour(models.Model):
-    user = models.ForeignKey(User, related_name="hour_entries", on_delete=models.PROTECT)
+    user = models.ForeignKey(
+        User, related_name="hour_entries", on_delete=models.PROTECT
+    )
     activity_date = models.DateField()
-    hours = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0.01)])
+    hours = models.DecimalField(
+        max_digits=6, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))]
+    )
     activity_type = models.CharField(max_length=60)
     notes = models.CharField(max_length=250, blank=True)
-    class Meta: ordering = ["-activity_date", "-id"]
-    def __str__(self): return f'{self.user.full_name}: {self.activity_type} ({self.activity_date})'
 
+    class Meta:
+        ordering = ["-activity_date", "-id"]
+
+    def __str__(self):
+        return f"{self.user.full_name}: {self.activity_type} ({self.activity_date})"

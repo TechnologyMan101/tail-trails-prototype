@@ -8,4 +8,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         removed = cleanup_expired_batches()
-        self.stdout.write(f"Photo batch cleanup complete ({removed} expired batch(es) removed)")
+        self.stdout.write(
+            f"Photo batch cleanup complete ({removed} expired batch(es) removed)"
+        )

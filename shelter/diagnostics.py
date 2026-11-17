@@ -86,7 +86,9 @@ def database_snapshot():
         error = str(exc)
     try:
         latest = MigrationRecorder.Migration.objects.order_by("-applied").first()
-        migration = f"{latest.app}.{latest.name}" if latest else "No migrations recorded"
+        migration = (
+            f"{latest.app}.{latest.name}" if latest else "No migrations recorded"
+        )
         migration_time = latest.applied if latest else None
     except Exception:
         migration = "Unavailable"

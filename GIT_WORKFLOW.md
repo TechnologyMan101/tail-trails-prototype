@@ -2,6 +2,8 @@
 
 This guide keeps the Git repository, application build number, release ZIP, deployment, and documentation aligned.
 
+**Fresh-install baseline:** importing source files is supported, but deploying this baseline over an earlier prototype database is not. Use a new installation directory and data folders as described in README.md.
+
 ## Repository safety
 
 The repository tracks source code and empty persistence-folder placeholders. It must not track:
@@ -35,7 +37,7 @@ The root `VERSION` file is the only application-version source. Django reads it 
 For a new iteration, change only `VERSION` before testing and committing:
 
 ```bash
-printf '%s\n' '2026.11.17.1' > VERSION
+printf '%s\n' '2026.11.17.2' > VERSION
 ```
 
 Use the same value for the release commit, annotated Git tag, ZIP, and overview PDF. Do not add `APP_VERSION` to `.env` or Compose.
@@ -125,17 +127,20 @@ git archive \
 
 The `tail-trails/` prefix preserves the expected extraction folder. Runtime data, `.env`, and `.git` are excluded automatically because they are not tracked.
 
-## Deploy from Git
+## Deploy this baseline from Git
 
-For a deployment checkout, preserve `.env`, `uploads/`, `postgres-data/`, and `data/`, then move to the verified tag:
+Clone into a new directory and check out the verified tag. Do not reuse earlier prototype runtime folders:
 
 ```bash
-git fetch --tags --prune
-release_tag=vYYYY.MM.DD.N
-git checkout "$release_tag"
-docker compose build --no-cache app cleanup
-docker compose up -d --force-recreate
+git clone https://your-git-server/example/tail-trails.git tail-trails
+cd tail-trails
+git checkout "v$(cat VERSION)"
+cp .env.example .env
+# Set unique secrets, host/proxy settings and the desired host port.
+docker compose up --build -d
 curl http://127.0.0.1:${TAILTRAILS_PORT:-8000}/healthz
 ```
 
-Container startup applies migrations automatically. Use `git switch main` before resuming development after a detached-tag deployment check.
+Stop an earlier deployment before using the same host port. Preserve its files separately for rollback; do not import its database into this baseline. Startup initializes the single current schema and refuses older prototype schemas. Restarting this same baseline reuses its own data normally.
+
+When using a release tag different from the default branch, check out that exact tag before configuring and starting the services. Use `git switch main` before resuming development after a detached-tag checkout.

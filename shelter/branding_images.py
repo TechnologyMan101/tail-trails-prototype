@@ -29,14 +29,22 @@ BRANDING_TYPES = {
 
 def validate_branding_upload(upload, kind):
     suffix = Path(str(upload.name).replace("\\", "/")).suffix.lower()
-    allowed_label = "JPG or PNG" if kind in {"logo", "favicon"} else "JPG, PNG, HEIC, or HEIF"
+    allowed_label = (
+        "JPG or PNG" if kind in {"logo", "favicon"} else "JPG, PNG, HEIC, or HEIF"
+    )
     if suffix not in BRANDING_EXTENSIONS[kind]:
         raise ValidationError(f"{upload.name} must be {allowed_label}.")
     content_type = getattr(upload, "content_type", "")
-    if content_type and content_type not in BRANDING_TYPES[kind] and content_type != "application/octet-stream":
+    if (
+        content_type
+        and content_type not in BRANDING_TYPES[kind]
+        and content_type != "application/octet-stream"
+    ):
         raise ValidationError(f"{upload.name} must be {allowed_label}.")
     if upload.size > settings.BRANDING_MAX_SIZE_MB * 1024 * 1024:
-        raise ValidationError(f"{upload.name} is larger than {settings.BRANDING_MAX_SIZE_MB} MiB.")
+        raise ValidationError(
+            f"{upload.name} is larger than {settings.BRANDING_MAX_SIZE_MB} MiB."
+        )
     validate_source_image(upload)
 
 
@@ -88,14 +96,22 @@ def _render(raw, kind, crop):
             image = image.resize(target, Image.Resampling.LANCZOS)
             output = io.BytesIO()
             if kind == "banner":
-                if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+                if image.mode in ("RGBA", "LA") or (
+                    image.mode == "P" and "transparency" in image.info
+                ):
                     rgba = image.convert("RGBA")
                     canvas = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
                     canvas.alpha_composite(rgba)
                     image = canvas.convert("RGB")
                 else:
                     image = image.convert("RGB")
-                image.save(output, format="JPEG", quality=settings.BRANDING_WEB_QUALITY, optimize=True, progressive=True)
+                image.save(
+                    output,
+                    format="JPEG",
+                    quality=settings.BRANDING_WEB_QUALITY,
+                    optimize=True,
+                    progressive=True,
+                )
                 return output.getvalue(), ".jpg"
             image = image.convert("RGBA")
             image.save(output, format="PNG", optimize=True)
@@ -112,7 +128,9 @@ def branding_preview_bytes(raw):
             background = Image.new("RGBA", image.size, (245, 247, 246, 255))
             background.alpha_composite(image)
             output = io.BytesIO()
-            background.convert("RGB").save(output, format="JPEG", quality=88, optimize=True)
+            background.convert("RGB").save(
+                output, format="JPEG", quality=88, optimize=True
+            )
             return output.getvalue()
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise ValidationError("The branding image could not be previewed.") from exc
@@ -126,7 +144,10 @@ def process_branding_asset(organization, kind, upload=None, crop=None):
         source_name = Path(str(upload.name).replace("\\", "/")).name
     elif original_field:
         raw = _source_bytes(original_field)
-        source_name = getattr(organization, f"{kind}_original_filename") or Path(original_field.name).name
+        source_name = (
+            getattr(organization, f"{kind}_original_filename")
+            or Path(original_field.name).name
+        )
     else:
         return False
 
@@ -137,20 +158,33 @@ def process_branding_asset(organization, kind, upload=None, crop=None):
 
     if upload:
         source_suffix = Path(source_name).suffix.lower() or ".bin"
-        original_field.save(f"{uuid.uuid4().hex}{source_suffix}", ContentFile(raw), save=False)
+        original_field.save(
+            f"{uuid.uuid4().hex}{source_suffix}", ContentFile(raw), save=False
+        )
         setattr(organization, f"{kind}_original_filename", source_name[:255])
-    getattr(organization, kind).save(f"{uuid.uuid4().hex}{suffix}", ContentFile(rendered), save=False)
+    getattr(organization, kind).save(
+        f"{uuid.uuid4().hex}{suffix}", ContentFile(rendered), save=False
+    )
     setattr(organization, f"{kind}_crop", crop)
-    organization.save(update_fields=[
-        kind, f"{kind}_original", f"{kind}_original_filename", f"{kind}_crop",
-    ])
+    organization.save(
+        update_fields=[
+            kind,
+            f"{kind}_original",
+            f"{kind}_original_filename",
+            f"{kind}_crop",
+        ]
+    )
 
     current_web_name = getattr(organization, kind).name
     current_original_name = getattr(organization, f"{kind}_original").name
     storage = getattr(organization, kind).storage
     if old_web_name and old_web_name not in {current_web_name, current_original_name}:
         storage.delete(old_web_name)
-    if upload and old_original_name and old_original_name not in {current_original_name, current_web_name}:
+    if (
+        upload
+        and old_original_name
+        and old_original_name not in {current_original_name, current_web_name}
+    ):
         original_field.storage.delete(old_original_name)
     return True
 
@@ -158,12 +192,21 @@ def process_branding_asset(organization, kind, upload=None, crop=None):
 def delete_branding_asset(organization, kind):
     web = getattr(organization, kind)
     original = getattr(organization, f"{kind}_original")
-    files = [(field.name, field.storage) for field in (web, original) if field and field.name]
+    files = [
+        (field.name, field.storage) for field in (web, original) if field and field.name
+    ]
     setattr(organization, kind, "")
     setattr(organization, f"{kind}_original", "")
     setattr(organization, f"{kind}_original_filename", "")
     setattr(organization, f"{kind}_crop", {})
-    organization.save(update_fields=[kind, f"{kind}_original", f"{kind}_original_filename", f"{kind}_crop"])
+    organization.save(
+        update_fields=[
+            kind,
+            f"{kind}_original",
+            f"{kind}_original_filename",
+            f"{kind}_crop",
+        ]
+    )
     deleted = set()
     for name, storage in files:
         if name not in deleted:

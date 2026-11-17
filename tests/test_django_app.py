@@ -16,10 +16,20 @@ from PIL import Image
 from shelter.branding import favicon_urls
 from shelter.diagnostics import format_bytes
 from shelter.forms import AnimalForm
-from shelter.images import store_photo_upload
-from shelter.models import Animal, AnimalPhoto, Organization, PhotoUploadBatch, Submission, SubmissionPhoto, User
+from shelter.images import store_cropped_photo
+from shelter.models import (
+    Animal,
+    AnimalPhoto,
+    Organization,
+    PhotoUploadBatch,
+    Submission,
+    SubmissionPhoto,
+    User,
+)
 
-PNG_BYTES = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 def make_png(size, color):
@@ -39,26 +49,96 @@ class TailTrailsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         Organization.objects.create()
-        cls.admin = User.objects.create_user(username="admin@test.com", email="admin@test.com", password="Trail123!", full_name="Admin User", phone="(555) 555-0100", role="Administrator")
-        cls.employee = User.objects.create_user(username="employee@test.com", email="employee@test.com", password="Trail123!", full_name="Employee User", phone="(555) 555-0101", role="Employee")
-        cls.volunteer = User.objects.create_user(username="volunteer@test.com", email="volunteer@test.com", password="Trail123!", full_name="Volunteer User", phone="(555) 555-0102", role="Volunteer")
-        cls.available = Animal.objects.create(animal_id="TT-2001", name="Milo", species="Dog", breed="Mix", age=3, age_unit="Years", sex="Male", intake_date=date.today(), intake_type="Stray", intake_location="Main", held_at="Kennel", specific_location="North", kennel_id="A1", placed_date=date.today(), color="Tan", spay_status="Neutered", status="Available", public_description="Friendly dog")
-        cls.hidden = Animal.objects.create(animal_id="TT-2002", name="Hidden", species="Cat", breed="Mix", age=2, age_unit="Years", sex="Female", intake_date=date.today(), intake_type="Transfer", intake_location="Main", held_at="Kennel", specific_location="North", kennel_id="C1", placed_date=date.today(), color="Black", spay_status="Spayed", status="Not Available")
-        AnimalPhoto.objects.create(animal=cls.available, external_url="https://example.com/one.jpg", position=0)
-        AnimalPhoto.objects.create(animal=cls.available, external_url="https://example.com/two.jpg", position=1)
+        cls.admin = User.objects.create_user(
+            username="admin@test.com",
+            email="admin@test.com",
+            password="Trail123!",
+            full_name="Admin User",
+            phone="(555) 555-0100",
+            role="Administrator",
+        )
+        cls.employee = User.objects.create_user(
+            username="employee@test.com",
+            email="employee@test.com",
+            password="Trail123!",
+            full_name="Employee User",
+            phone="(555) 555-0101",
+            role="Employee",
+        )
+        cls.volunteer = User.objects.create_user(
+            username="volunteer@test.com",
+            email="volunteer@test.com",
+            password="Trail123!",
+            full_name="Volunteer User",
+            phone="(555) 555-0102",
+            role="Volunteer",
+        )
+        cls.available = Animal.objects.create(
+            animal_id="TT-2001",
+            name="Milo",
+            species="Dog",
+            breed="Mix",
+            age=3,
+            age_unit="Years",
+            sex="Male",
+            intake_date=date.today(),
+            intake_type="Stray",
+            intake_location="Main",
+            held_at="Kennel",
+            kennel_location="North",
+            kennel_id="A1",
+            placed_date=date.today(),
+            color="Tan",
+            spay_status="Spayed/Neutered",
+            status="Available",
+            public_description="Friendly dog",
+        )
+        cls.hidden = Animal.objects.create(
+            animal_id="TT-2002",
+            name="Hidden",
+            species="Cat",
+            breed="Mix",
+            age=2,
+            age_unit="Years",
+            sex="Female",
+            intake_date=date.today(),
+            intake_type="Transfer",
+            intake_location="Main",
+            held_at="Kennel",
+            kennel_location="North",
+            kennel_id="C1",
+            placed_date=date.today(),
+            color="Black",
+            spay_status="Spayed/Neutered",
+            status="Not Available",
+        )
+        AnimalPhoto.objects.create(
+            animal=cls.available, external_url="https://example.com/one.jpg", position=0
+        )
+        AnimalPhoto.objects.create(
+            animal=cls.available, external_url="https://example.com/two.jpg", position=1
+        )
 
-    def login(self, user): self.client.force_login(user)
+    def login(self, user):
+        self.client.force_login(user)
 
     def test_new_animal_profile_saves(self):
         self.login(self.employee)
-        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="New arrival"))
+        response = self.client.post(
+            reverse("animal_new"), self.animal_form_data(name="New arrival")
+        )
         if response.status_code == 200:
             self.fail(str(response.context["form"].errors))
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Animal.objects.filter(name="New arrival").exists())
 
     def deceased_data(self, **overrides):
-        data = self.animal_form_data(status="Deceased", deceased_reason="Natural causes", deceased_confirm="on", deceased_password="Trail123!")
+        data = self.animal_form_data(
+            status="Deceased",
+            deceased_reason="Natural causes",
+            deceased_confirm="on",
+            deceased_password="Trail123!",
+        )
         data.update(overrides)
         return data
 
@@ -66,7 +146,11 @@ class TailTrailsTests(TestCase):
         self.login(self.employee)
         url = reverse("animal_edit", args=[self.available.pk])
         self.assertEqual(self.client.get(url).status_code, 200)
-        for data in (self.deceased_data(deceased_password="wrong"), self.deceased_data(deceased_confirm=""), self.deceased_data(deceased_reason="")):
+        for data in (
+            self.deceased_data(deceased_password="wrong"),
+            self.deceased_data(deceased_confirm=""),
+            self.deceased_data(deceased_reason=""),
+        ):
             self.assertEqual(self.client.post(url, data).status_code, 200)
             self.available.refresh_from_db()
             self.assertEqual(self.available.status, "Available")
@@ -77,14 +161,19 @@ class TailTrailsTests(TestCase):
         self.assertEqual(self.available.deceased_by, self.employee)
         self.assertIsNotNone(self.available.deceased_at)
 
-    def test_volunteer_cannot_confirm_euthanasia(self):
+    def test_volunteer_cannot_confirm_deceased(self):
         self.login(self.volunteer)
-        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.deceased_data())
+        response = self.client.post(
+            reverse("animal_edit", args=[self.available.pk]), self.deceased_data()
+        )
         self.assertEqual(response.status_code, 403)
 
-    def test_regular_editor_cannot_set_euthanized_status(self):
+    def test_deceased_selection_needs_confirmation(self):
         self.login(self.employee)
-        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.animal_form_data(status="Deceased"))
+        response = self.client.post(
+            reverse("animal_edit", args=[self.available.pk]),
+            self.animal_form_data(status="Deceased"),
+        )
         self.assertEqual(response.status_code, 200)
         self.available.refresh_from_db()
         self.assertEqual(self.available.status, "Available")
@@ -92,15 +181,21 @@ class TailTrailsTests(TestCase):
     def test_confirmed_status_is_permanent_in_model_and_database(self):
         from django.core.exceptions import ValidationError
         from django.db import DatabaseError, transaction
+
         self.login(self.admin)
-        self.client.post(reverse("animal_edit", args=[self.available.pk]), self.deceased_data())
+        self.client.post(
+            reverse("animal_edit", args=[self.available.pk]), self.deceased_data()
+        )
         self.available.refresh_from_db()
         self.available.status = "Available"
-        with self.assertRaises(ValidationError): self.available.save()
+        with self.assertRaises(ValidationError):
+            self.available.save()
         with self.assertRaises(DatabaseError), transaction.atomic():
             Animal.objects.filter(pk=self.available.pk).update(status="Available")
         with self.assertRaises(DatabaseError), transaction.atomic():
-            Animal.objects.filter(pk=self.available.pk).update(deceased_reason="Changed reason")
+            Animal.objects.filter(pk=self.available.pk).update(
+                deceased_reason="Changed reason"
+            )
         self.available.refresh_from_db()
         self.assertEqual(self.available.status, "Deceased")
 
@@ -109,24 +204,41 @@ class TailTrailsTests(TestCase):
         profile = reverse("animal_profile", args=[self.available.pk])
         self.assertEqual(self.client.get(profile).status_code, 404)
         self.assertNotContains(self.client.get(reverse("home")), "Milo")
-        self.assertEqual(len(self.client.get(reverse("animals") + "?include_archived=1").context["animals"]), 0)
+        self.assertEqual(
+            len(
+                self.client.get(reverse("animals") + "?include_archived=1").context[
+                    "animals"
+                ]
+            ),
+            0,
+        )
         self.login(self.volunteer)
         self.assertEqual(self.client.get(profile).status_code, 404)
-        self.assertEqual(self.client.get(reverse("submit_update", args=[self.available.pk])).status_code, 404)
+        self.assertEqual(
+            self.client.get(
+                reverse("submit_update", args=[self.available.pk])
+            ).status_code,
+            404,
+        )
         self.login(self.employee)
         default = self.client.get(reverse("animals"))
         self.assertNotIn(self.available.pk, [a.pk for a in default.context["animals"]])
-        included = self.client.get(reverse("animals") + "?include_archived=1&sort=name_desc")
+        included = self.client.get(
+            reverse("animals") + "?include_archived=1&sort=name_desc"
+        )
         self.assertIn(self.available.pk, [a.pk for a in included.context["animals"]])
         self.assertContains(self.client.get(profile), "Archived record")
 
-    def test_archive_and_restore_does_not_reverse_euthanasia(self):
+    def test_archive_and_restore_does_not_reverse_deceased(self):
         self.login(self.admin)
-        self.client.post(reverse("animal_edit", args=[self.available.pk]), self.deceased_data())
+        self.client.post(
+            reverse("animal_edit", args=[self.available.pk]), self.deceased_data()
+        )
         url = reverse("animal_edit", args=[self.available.pk])
         for archived in (True, False):
             data = self.animal_form_data(status="Available")
-            if archived: data["is_archived"] = "on"
+            if archived:
+                data["is_archived"] = "on"
             self.assertEqual(self.client.post(url, data).status_code, 302)
             self.available.refresh_from_db()
             self.assertEqual(self.available.is_archived, archived)
@@ -135,7 +247,10 @@ class TailTrailsTests(TestCase):
     def test_create_new_profile_with_photo_opens_crop_batch(self):
         self.login(self.employee)
         upload = SimpleUploadedFile("arrival.png", PNG_BYTES, content_type="image/png")
-        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="New photo arrival", photos=upload))
+        response = self.client.post(
+            reverse("animal_new"),
+            self.animal_form_data(name="New photo arrival", photos=upload),
+        )
         self.assertEqual(response.status_code, 302)
         animal = Animal.objects.get(name="New photo arrival")
         self.assertTrue(animal.photo_upload_batches.exists())
@@ -143,22 +258,42 @@ class TailTrailsTests(TestCase):
 
     def test_create_deceased_profile_and_missing_field_summary(self):
         self.login(self.employee)
-        response = self.client.post(reverse("animal_new"), self.deceased_data(name="Deceased arrival"))
+        response = self.client.post(
+            reverse("animal_new"), self.deceased_data(name="Deceased arrival")
+        )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Animal.objects.get(name="Deceased arrival").status, "Deceased")
-        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="", public_description=""))
+        response = self.client.post(
+            reverse("animal_new"), self.animal_form_data(name="", public_description="")
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "The profile was not saved")
         self.assertContains(response, "Required when the animal is available")
 
     def animal_form_data(self, **overrides):
         data = {
-            "name":"Milo", "species":"Dog", "breed":"Mix", "age":"3", "age_unit":"Years", "sex":"Male",
-            "intake_date":date.today(), "intake_type":"Stray", "intake_location":"Main", "held_at":"Kennel",
-            "specific_location":"North", "kennel_id":"A1", "placed_date":date.today(), "color":["Tan"],
-            "spay_status":"Spayed/Neutered", "status":"Available", "public_description":"Friendly dog",
-            "vaccination_status":"", "heartworm_status":"Unknown", "fleas_status":"Negative",
-            "energy_level":"Unknown", "house_trained":"Unknown", "leash_skills":"Unknown",
+            "name": "Milo",
+            "species": "Dog",
+            "breed": "Mix",
+            "age": "3",
+            "age_unit": "Years",
+            "sex": "Male",
+            "intake_date": date.today(),
+            "intake_type": "Stray",
+            "intake_location": "Main",
+            "held_at": "Kennel",
+            "kennel_location": "North",
+            "kennel_id": "A1",
+            "placed_date": date.today(),
+            "color": ["Tan"],
+            "spay_status": "Spayed/Neutered",
+            "status": "Available",
+            "public_description": "Friendly dog",
+            "vaccination_status": "",
+            "heartworm_status": "Unknown",
+            "fleas_status": "Negative",
+            "house_trained": "Unknown",
+            "leash_skills": "Unknown",
         }
         data.update(overrides)
         return data
@@ -176,33 +311,49 @@ class TailTrailsTests(TestCase):
             self.assertIn(name, response.context["form"].errors)
         self.assertFalse(Animal.objects.filter(name="Missing medical value").exists())
         page = self.client.get(reverse("animal_new"))
-        self.assertContains(page, 'Fleas *')
-        self.assertContains(page, 'Heartworm status *')
+        self.assertContains(page, "Fleas *")
+        self.assertContains(page, "Heartworm status *")
 
     def test_negative_animal_quantities_cannot_be_created_or_saved(self):
         self.login(self.employee)
         for field in ("age", "weight", "height", "litter_size"):
             with self.subTest(field=field):
                 extra = {field: "-1"}
-                if field == "litter_size": extra.update(spay_status="Nursing", litter_dob=date.today())
-                for url in (reverse("animal_new"), reverse("animal_edit", args=[self.available.pk])):
+                if field == "litter_size":
+                    extra.update(spay_status="Nursing", litter_dob=date.today())
+                for url in (
+                    reverse("animal_new"),
+                    reverse("animal_edit", args=[self.available.pk]),
+                ):
                     response = self.client.post(url, self.animal_form_data(**extra))
                     self.assertEqual(response.status_code, 200)
                     self.assertIn(field, response.context["form"].errors)
         self.available.refresh_from_db()
         self.assertEqual(self.available.age, 3)
-        valid = AnimalForm(data=self.animal_form_data(age="0", weight="0", height="0"), user=self.employee)
+        valid = AnimalForm(
+            data=self.animal_form_data(age="0", weight="0", height="0"),
+            user=self.employee,
+        )
         self.assertTrue(valid.is_valid(), valid.errors)
 
     def test_numeric_inputs_have_unsigned_controls_and_no_wheel_increment(self):
         form = AnimalForm()
-        for name, precision in (("age", 1), ("weight", 3), ("height", 1), ("litter_size", 0)):
+        for name, precision in (
+            ("age", 1),
+            ("weight", 3),
+            ("height", 1),
+            ("litter_size", 0),
+        ):
             self.assertEqual(form.fields[name].widget.input_type, "text")
-            self.assertEqual(form.fields[name].widget.attrs["data-nonnegative-decimal"], str(precision))
+            self.assertEqual(
+                form.fields[name].widget.attrs["data-nonnegative-decimal"],
+                str(precision),
+            )
             self.assertGreaterEqual(form.fields[name].min_value, 0)
 
     def test_activity_log_and_animal_change_history_are_removed(self):
         from django.apps import apps
+
         for role in (self.admin, self.employee, self.volunteer):
             self.login(role)
             page = self.client.get(reverse("animal_profile", args=[self.available.pk]))
@@ -210,11 +361,21 @@ class TailTrailsTests(TestCase):
             self.assertNotContains(page, "Activity log")
             self.assertEqual(self.client.get("/activity").status_code, 404)
         for model in ("AuditEvent", "AnimalHistory"):
-            with self.assertRaises(LookupError): apps.get_model("shelter", model)
+            with self.assertRaises(LookupError):
+                apps.get_model("shelter", model)
 
     def test_intake_dropdown_and_stray_fields_ignore_inactive_input(self):
         from shelter.animal_options import INTAKES
-        form = AnimalForm(data=self.animal_form_data(intake_type="Owner Surrender", intake_location="Forged stray location", found_by="Ignored", previous_owner="Former owner"), user=self.employee)
+
+        form = AnimalForm(
+            data=self.animal_form_data(
+                intake_type="Owner Surrender",
+                intake_location="Forged stray location",
+                found_by="Ignored",
+                previous_owner="Former owner",
+            ),
+            user=self.employee,
+        )
         self.assertTrue(form.is_valid(), form.errors)
         self.assertTrue(form.fields["intake_location"].disabled)
         self.assertNotIn("found_by", form.fields)
@@ -222,44 +383,86 @@ class TailTrailsTests(TestCase):
         self.assertEqual(form.cleaned_data["intake_location"], "")
         self.assertEqual(form.cleaned_data["previous_owner"], "Former owner")
         self.assertEqual(len(INTAKES), 6)
-        stray = AnimalForm(data=self.animal_form_data(intake_location=""), user=self.employee)
+        stray = AnimalForm(
+            data=self.animal_form_data(intake_location=""), user=self.employee
+        )
         self.assertFalse(stray.is_valid())
         self.assertIn("intake_location", stray.errors)
 
     def test_foster_requires_contact_fields_and_ignores_kennel_fields(self):
-        invalid = AnimalForm(data=self.animal_form_data(held_at="Foster Home", specific_location="", kennel_id=""), user=self.employee)
+        invalid = AnimalForm(
+            data=self.animal_form_data(
+                held_at="Foster Home", kennel_location="", kennel_id=""
+            ),
+            user=self.employee,
+        )
         self.assertFalse(invalid.is_valid())
         self.assertIn("foster_phone", invalid.errors)
         self.assertIn("foster_address", invalid.errors)
-        valid = AnimalForm(data=self.animal_form_data(held_at="Foster Home", specific_location="", kennel_id="", foster_phone="(619) 555-0100", foster_address="1 Example Street"), user=self.employee)
+        valid = AnimalForm(
+            data=self.animal_form_data(
+                held_at="Foster Home",
+                kennel_location="",
+                kennel_id="",
+                foster_phone="(619) 555-0100",
+                foster_address="1 Example Street",
+            ),
+            user=self.employee,
+        )
         self.assertTrue(valid.is_valid(), valid.errors)
         self.assertTrue(valid.fields["kennel_id"].disabled)
-        self.assertEqual(valid.fields["specific_location"].label, "Kennel location")
+        self.assertEqual(valid.fields["kennel_location"].label, "Kennel location")
 
     def test_nursing_requires_litter_size_and_dob_only_when_selected(self):
-        invalid = AnimalForm(data=self.animal_form_data(spay_status="Nursing"), user=self.employee)
+        invalid = AnimalForm(
+            data=self.animal_form_data(spay_status="Nursing"), user=self.employee
+        )
         self.assertFalse(invalid.is_valid())
         self.assertIn("litter_size", invalid.errors)
         self.assertIn("litter_dob", invalid.errors)
-        valid = AnimalForm(data=self.animal_form_data(spay_status="Nursing", litter_size="3", litter_dob="2026-11-01"), user=self.employee)
+        valid = AnimalForm(
+            data=self.animal_form_data(
+                spay_status="Nursing", litter_size="3", litter_dob="2026-11-01"
+            ),
+            user=self.employee,
+        )
         self.assertTrue(valid.is_valid(), valid.errors)
-        not_nursing = AnimalForm(data=self.animal_form_data(litter_size="invalid", litter_dob="invalid"), user=self.employee)
+        not_nursing = AnimalForm(
+            data=self.animal_form_data(litter_size="invalid", litter_dob="invalid"),
+            user=self.employee,
+        )
         self.assertTrue(not_nursing.is_valid(), not_nursing.errors)
         self.assertIsNone(not_nursing.cleaned_data["litter_size"])
 
     def test_microchip_checkbox_controls_id_requirement(self):
-        missing = AnimalForm(data=self.animal_form_data(has_microchip="on", microchip=""), user=self.employee)
+        missing = AnimalForm(
+            data=self.animal_form_data(has_microchip="on", microchip=""),
+            user=self.employee,
+        )
         self.assertFalse(missing.is_valid())
         self.assertIn("microchip", missing.errors)
-        present = AnimalForm(data=self.animal_form_data(has_microchip="on", microchip="123456789"), user=self.employee)
+        present = AnimalForm(
+            data=self.animal_form_data(has_microchip="on", microchip="123456789"),
+            user=self.employee,
+        )
         self.assertTrue(present.is_valid(), present.errors)
-        unchecked = AnimalForm(data=self.animal_form_data(microchip="ignored"), user=self.employee)
+        unchecked = AnimalForm(
+            data=self.animal_form_data(microchip="ignored"), user=self.employee
+        )
         self.assertTrue(unchecked.is_valid(), unchecked.errors)
         self.assertEqual(unchecked.cleaned_data["microchip"], "")
 
     def test_multicolor_custom_breed_and_patterns_save_and_search(self):
         self.login(self.employee)
-        response = self.client.post(reverse("animal_new"), self.animal_form_data(name="Multicolor arrival", breed="Labrador Retriever, Custom Mix", coat_pattern="Brindle, Bicolor", color=["Black", "White"]))
+        response = self.client.post(
+            reverse("animal_new"),
+            self.animal_form_data(
+                name="Multicolor arrival",
+                breed="Labrador Retriever, Custom Mix",
+                coat_pattern="Brindle, Bicolor",
+                color=["Black", "White"],
+            ),
+        )
         self.assertEqual(response.status_code, 302)
         animal = Animal.objects.get(name="Multicolor arrival")
         self.assertEqual(animal.color, "Black, White")
@@ -270,58 +473,117 @@ class TailTrailsTests(TestCase):
 
     def test_medical_selects_defaults_and_species_conditional_leash(self):
         form = AnimalForm()
-        for name in ("vaccination_status", "fleas_status", "house_trained", "leash_skills", "heartworm_status", "coat_length"):
+        for name in (
+            "vaccination_status",
+            "fleas_status",
+            "house_trained",
+            "leash_skills",
+            "heartworm_status",
+            "coat_length",
+        ):
             self.assertIn(("", "---------"), list(form.fields[name].choices))
         for removed in ("energy_level", "spay_notes", "flea_prevention"):
             self.assertNotIn(removed, form.fields)
-        rabbit = AnimalForm(data=self.animal_form_data(species="Rabbit", leash_skills="invalid", age_unit="Weeks"), user=self.employee)
+        rabbit = AnimalForm(
+            data=self.animal_form_data(
+                species="Rabbit", leash_skills="invalid", age_unit="Weeks"
+            ),
+            user=self.employee,
+        )
         self.assertTrue(rabbit.is_valid(), rabbit.errors)
         self.assertTrue(rabbit.fields["leash_skills"].disabled)
-        invalid = AnimalForm(data=self.animal_form_data(vaccination_status="anything", fleas_status="anything", house_trained="anything"), user=self.employee)
+        invalid = AnimalForm(
+            data=self.animal_form_data(
+                vaccination_status="anything",
+                fleas_status="anything",
+                house_trained="anything",
+            ),
+            user=self.employee,
+        )
         self.assertFalse(invalid.is_valid())
-        for field in ("vaccination_status", "fleas_status", "house_trained"): self.assertIn(field, invalid.errors)
+        for field in ("vaccination_status", "fleas_status", "house_trained"):
+            self.assertIn(field, invalid.errors)
 
     def test_age_sort_accounts_for_weeks_months_and_years(self):
         self.login(self.employee)
         Animal.objects.filter(pk=self.available.pk).update(age=8, age_unit="Weeks")
         Animal.objects.filter(pk=self.hidden.pk).update(age=1, age_unit="Years")
-        animals = list(self.client.get(reverse("animals") + "?sort=age_asc").context["animals"])
+        animals = list(
+            self.client.get(reverse("animals") + "?sort=age_asc").context["animals"]
+        )
         self.assertEqual([a.pk for a in animals], [self.available.pk, self.hidden.pk])
 
     def test_revised_color_options_and_coat_length(self):
         form = AnimalForm()
-        self.assertEqual([value for value, label in form.fields["color"].choices], ["Black", "White", "Blue/Gray", "Red/Orange", "Tan", "Cream", "Brown", "Silver"])
-        self.assertEqual([value for value, label in form.fields["coat_length"].choices], ["", "Short", "Medium", "Long"])
-        data = self.animal_form_data(color=["Blue/Gray", "Red/Orange"], coat_length="Medium", heartworm_status="Unknown")
+        self.assertEqual(
+            [value for value, label in form.fields["color"].choices],
+            [
+                "Black",
+                "White",
+                "Blue/Gray",
+                "Red/Orange",
+                "Tan",
+                "Cream",
+                "Brown",
+                "Silver",
+            ],
+        )
+        self.assertEqual(
+            [value for value, label in form.fields["coat_length"].choices],
+            ["", "Short", "Medium", "Long"],
+        )
+        data = self.animal_form_data(
+            color=["Blue/Gray", "Red/Orange"],
+            coat_length="Medium",
+            heartworm_status="Unknown",
+        )
         valid = AnimalForm(data=data, user=self.employee)
         self.assertTrue(valid.is_valid(), valid.errors)
         self.assertEqual(valid.cleaned_data["color"], "Blue/Gray, Red/Orange")
-        invalid = AnimalForm(data=self.animal_form_data(color=["Unknown"], coat_length="Curly"), user=self.employee)
+        invalid = AnimalForm(
+            data=self.animal_form_data(color=["Unknown"], coat_length="Curly"),
+            user=self.employee,
+        )
         self.assertFalse(invalid.is_valid())
         self.assertIn("color", invalid.errors)
         self.assertIn("coat_length", invalid.errors)
 
     def test_metric_measurements_enforce_gram_and_mm_precision(self):
         from decimal import Decimal
-        form = AnimalForm(data=self.animal_form_data(weight="12.345", height="45.6"), user=self.employee)
+
+        form = AnimalForm(
+            data=self.animal_form_data(weight="12.345", height="45.6"),
+            user=self.employee,
+        )
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["weight"], Decimal("12.345"))
         self.assertEqual(form.cleaned_data["height"], Decimal("45.6"))
-        invalid = AnimalForm(data=self.animal_form_data(weight="12.3456", height="45.67"), user=self.employee)
+        invalid = AnimalForm(
+            data=self.animal_form_data(weight="12.3456", height="45.67"),
+            user=self.employee,
+        )
         self.assertFalse(invalid.is_valid())
         self.assertIn("weight", invalid.errors)
         self.assertIn("height", invalid.errors)
-        negative = AnimalForm(data=self.animal_form_data(weight="-1", height="-1"), user=self.employee)
+        negative = AnimalForm(
+            data=self.animal_form_data(weight="-1", height="-1"), user=self.employee
+        )
         self.assertFalse(negative.is_valid())
         self.assertIn("weight", negative.errors)
         self.assertIn("height", negative.errors)
         for name in ("weight", "height"):
             self.assertEqual(form.fields[name].widget.input_type, "text")
             self.assertEqual(form.fields[name].widget.attrs["inputmode"], "decimal")
-        self.assertEqual(list(form.fields["spay_status"].choices)[-1], ("Unknown", "Unknown"))
+        self.assertEqual(
+            list(form.fields["spay_status"].choices)[-1], ("Unknown", "Unknown")
+        )
 
     def test_foster_contact_information_is_staff_only(self):
-        Animal.objects.filter(pk=self.available.pk).update(held_at="Foster Home", foster_phone="619-555-0199", foster_address="Private Foster Address")
+        Animal.objects.filter(pk=self.available.pk).update(
+            held_at="Foster Home",
+            foster_phone="619-555-0199",
+            foster_address="Private Foster Address",
+        )
         url = reverse("animal_profile", args=[self.available.pk])
         public = self.client.get(url)
         self.assertNotContains(public, "619-555-0199")
@@ -344,10 +606,16 @@ class TailTrailsTests(TestCase):
 
     def test_public_only_sees_available_animals(self):
         page = self.client.get(reverse("animals"))
-        self.assertContains(page, "Milo"); self.assertNotContains(page, "Hidden")
+        self.assertContains(page, "Milo")
+        self.assertNotContains(page, "Hidden")
         self.assertContains(page, "<h3>Milo</h3>", html=True)
         self.assertNotContains(page, "photo-name")
-        self.assertEqual(self.client.get(reverse("animal_profile", args=[self.hidden.pk])).status_code, 404)
+        self.assertEqual(
+            self.client.get(
+                reverse("animal_profile", args=[self.hidden.pk])
+            ).status_code,
+            404,
+        )
 
     def test_home_and_search_cards_show_animal_names(self):
         home = self.client.get(reverse("home"))
@@ -370,18 +638,28 @@ class TailTrailsTests(TestCase):
         self.assertContains(page, 'rel="apple-touch-icon" sizes="180x180"')
         generated = sorted(Path(settings.MEDIA_ROOT).glob("branding/generated/*.png"))
         self.assertEqual(len(generated), 2)
-        self.assertEqual(sorted(Image.open(path).size for path in generated), [(32, 32), (180, 180)])
+        self.assertEqual(
+            sorted(Image.open(path).size for path in generated), [(32, 32), (180, 180)]
+        )
 
     def test_uploaded_favicon_overrides_logo_and_refreshes_variants(self):
         organization = Organization.current()
-        organization.logo = SimpleUploadedFile("logo.png", make_png((80, 80), (30, 80, 210)), content_type="image/png")
+        organization.logo = SimpleUploadedFile(
+            "logo.png", make_png((80, 80), (30, 80, 210)), content_type="image/png"
+        )
         organization.save(update_fields=["logo"])
         logo_urls = favicon_urls(organization, force=True)
-        organization.favicon = SimpleUploadedFile("favicon.png", make_png((80, 80), (210, 55, 45)), content_type="image/png")
+        organization.favicon = SimpleUploadedFile(
+            "favicon.png", make_png((80, 80), (210, 55, 45)), content_type="image/png"
+        )
         organization.save(update_fields=["favicon"])
         favicon_result = favicon_urls(organization, force=True)
-        self.assertNotEqual(logo_urls["favicon_32_url"], favicon_result["favicon_32_url"])
-        generated_32 = next(Path(settings.MEDIA_ROOT).glob("branding/generated/*-32.png"))
+        self.assertNotEqual(
+            logo_urls["favicon_32_url"], favicon_result["favicon_32_url"]
+        )
+        generated_32 = next(
+            Path(settings.MEDIA_ROOT).glob("branding/generated/*-32.png")
+        )
         with Image.open(generated_32) as icon:
             center = icon.convert("RGB").getpixel((16, 16))
         self.assertGreater(center[0], 180)
@@ -398,7 +676,10 @@ class TailTrailsTests(TestCase):
         page = self.client.get(reverse("organization"))
         self.assertContains(page, "JPG or PNG, up to 25 MiB")
         self.assertContains(page, "JPG, PNG, HEIC, or HEIF")
-        self.assertContains(page, 'accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif"')
+        self.assertContains(
+            page,
+            'accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif"',
+        )
         self.assertContains(page, "data-branding-cropper", count=3)
         self.assertContains(page, "data-crop-selection", count=3)
         self.assertContains(page, "data-crop-handle", count=12)
@@ -409,17 +690,32 @@ class TailTrailsTests(TestCase):
 
     def test_branding_uploads_retain_originals_and_generate_cropped_assets(self):
         self.login(self.admin)
-        response = self.client.post(reverse("organization"), {
-            "name": "Second Chance Animal Center",
-            "primary_color": "#245C4A",
-            "secondary_color": "#D47A45",
-            "logo_upload": SimpleUploadedFile("wide-logo.png", make_png((600, 300), (20, 140, 90)), content_type="image/png"),
-            "banner_upload": SimpleUploadedFile("banner.png", make_png((900, 900), (150, 60, 40)), content_type="image/png"),
-            "favicon_upload": SimpleUploadedFile("icon.png", make_png((300, 500), (50, 80, 190)), content_type="image/png"),
-            "logo_crop": '{"x":0.25,"y":0,"width":0.5,"height":1}',
-            "banner_crop": '{"x":0,"y":0.333333,"width":1,"height":0.333333}',
-            "favicon_crop": '{"x":0,"y":0.2,"width":1,"height":0.6}',
-        })
+        response = self.client.post(
+            reverse("organization"),
+            {
+                "name": "Second Chance Animal Center",
+                "primary_color": "#245C4A",
+                "secondary_color": "#D47A45",
+                "logo_upload": SimpleUploadedFile(
+                    "wide-logo.png",
+                    make_png((600, 300), (20, 140, 90)),
+                    content_type="image/png",
+                ),
+                "banner_upload": SimpleUploadedFile(
+                    "banner.png",
+                    make_png((900, 900), (150, 60, 40)),
+                    content_type="image/png",
+                ),
+                "favicon_upload": SimpleUploadedFile(
+                    "icon.png",
+                    make_png((300, 500), (50, 80, 190)),
+                    content_type="image/png",
+                ),
+                "logo_crop": '{"x":0.25,"y":0,"width":0.5,"height":1}',
+                "banner_crop": '{"x":0,"y":0.333333,"width":1,"height":0.333333}',
+                "favicon_crop": '{"x":0,"y":0.2,"width":1,"height":0.6}',
+            },
+        )
         self.assertEqual(response.status_code, 302)
         organization = Organization.current()
         self.assertTrue(organization.logo.name.endswith(".png"))
@@ -437,24 +733,39 @@ class TailTrailsTests(TestCase):
         self.login(self.admin)
         response = self.client.post(
             reverse("branding_preview", args=["banner"]),
-            {"image": SimpleUploadedFile("banner.heic", make_heic((300, 200)), content_type="image/heic")},
+            {
+                "image": SimpleUploadedFile(
+                    "banner.heic", make_heic((300, 200)), content_type="image/heic"
+                )
+            },
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/jpeg")
         with Image.open(io.BytesIO(response.content)) as preview:
             self.assertEqual(preview.format, "JPEG")
         self.client.force_login(self.employee)
-        self.assertEqual(self.client.get(reverse("branding_preview", args=["banner"])).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("branding_preview", args=["banner"])).status_code,
+            403,
+        )
 
     def test_animal_sorting_options_change_result_order(self):
         self.hidden.name = "alice"
         self.hidden.status = "Available"
         self.hidden.public_description = "Friendly cat"
         self.hidden.save(update_fields=["name", "status", "public_description"])
-        descending = self.client.get(reverse("animals"), {"sort": "name_desc"}).content.decode()
-        ascending = self.client.get(reverse("animals"), {"sort": "name_asc"}).content.decode()
-        self.assertLess(descending.find("<h3>Milo</h3>"), descending.find("<h3>alice</h3>"))
-        self.assertLess(ascending.find("<h3>alice</h3>"), ascending.find("<h3>Milo</h3>"))
+        descending = self.client.get(
+            reverse("animals"), {"sort": "name_desc"}
+        ).content.decode()
+        ascending = self.client.get(
+            reverse("animals"), {"sort": "name_asc"}
+        ).content.decode()
+        self.assertLess(
+            descending.find("<h3>Milo</h3>"), descending.find("<h3>alice</h3>")
+        )
+        self.assertLess(
+            ascending.find("<h3>alice</h3>"), ascending.find("<h3>Milo</h3>")
+        )
         self.assertIn('value="name_desc" selected', descending)
         self.assertIn("Apply sort", descending)
 
@@ -472,7 +783,9 @@ class TailTrailsTests(TestCase):
         css = (settings.BASE_DIR / "static" / "style.css").read_text()
         script = (settings.BASE_DIR / "static" / "app.js").read_text()
         self.assertIn(".gallery-lightbox{overflow:hidden!important", css)
-        self.assertIn(".lightbox-open,.lightbox-open body{overflow:hidden!important}", css)
+        self.assertIn(
+            ".lightbox-open,.lightbox-open body{overflow:hidden!important}", css
+        )
         self.assertIn("classList.add('lightbox-open')", script)
         self.assertIn("classList.remove('lightbox-open')", script)
 
@@ -480,7 +793,12 @@ class TailTrailsTests(TestCase):
         self.login(self.volunteer)
         self.assertEqual(self.client.get(reverse("animal_new")).status_code, 403)
         self.assertEqual(self.client.get(reverse("users")).status_code, 403)
-        self.assertEqual(self.client.get(reverse("submit_update", args=[self.available.pk])).status_code, 200)
+        self.assertEqual(
+            self.client.get(
+                reverse("submit_update", args=[self.available.pk])
+            ).status_code,
+            200,
+        )
         self.client.force_login(self.employee)
         self.assertEqual(self.client.get(reverse("submissions")).status_code, 200)
         self.assertEqual(self.client.get(reverse("users")).status_code, 403)
@@ -489,8 +807,12 @@ class TailTrailsTests(TestCase):
         self.login(self.employee)
         original = self.available.photos.first()
         upload = SimpleUploadedFile("new.png", PNG_BYTES, content_type="image/png")
-        data = self.animal_form_data(remove_photo=str(original.pk), photos=upload, make_new_primary="1")
-        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), data)
+        data = self.animal_form_data(
+            remove_photo=str(original.pk), photos=upload, make_new_primary="1"
+        )
+        response = self.client.post(
+            reverse("animal_edit", args=[self.available.pk]), data
+        )
         self.assertEqual(response.status_code, 302)
         self.assertIn("/photo-batches/", response.url)
         self.finalize_latest_batch(self.employee)
@@ -504,8 +826,15 @@ class TailTrailsTests(TestCase):
         with Image.open(generated.image.path) as web_image:
             self.assertEqual(web_image.format, "JPEG")
             self.assertEqual(web_image.size, (1600, 1200))
-        self.assertEqual(self.client.get(reverse("media_file", args=[generated.original_image.name])).status_code, 404)
-        download = self.client.get(reverse("original_photo", args=["animal", generated.pk]))
+        self.assertEqual(
+            self.client.get(
+                reverse("media_file", args=[generated.original_image.name])
+            ).status_code,
+            404,
+        )
+        download = self.client.get(
+            reverse("original_photo", args=["animal", generated.pk])
+        )
         self.assertEqual(download.status_code, 200)
         self.assertIn("attachment", download["Content-Disposition"])
         self.assertIn("new.png", download["Content-Disposition"])
@@ -517,7 +846,7 @@ class TailTrailsTests(TestCase):
         original_url = reverse("original_photo", args=["animal", generated.pk])
         self.assertContains(editor, f'href="{original_url}"')
         self.assertContains(editor, "Download original")
-        self.assertContains(editor, f"Download original file for Milo photo")
+        self.assertContains(editor, "Download original file for Milo photo")
 
     def test_external_photos_show_original_unavailable(self):
         self.login(self.employee)
@@ -525,12 +854,16 @@ class TailTrailsTests(TestCase):
         self.assertContains(editor, "Original unavailable", count=2)
         self.assertContains(editor, 'class="photo-manager"')
         styles = (settings.BASE_DIR / "static" / "style.css").read_text()
-        self.assertIn("grid-template-columns:repeat(auto-fill,minmax(210px,1fr))", styles)
+        self.assertIn(
+            "grid-template-columns:repeat(auto-fill,minmax(210px,1fr))", styles
+        )
         self.assertIn("aspect-ratio:4/3;object-fit:cover", styles)
 
     def test_heic_upload_is_retained_and_converted_to_web_jpg(self):
         self.login(self.employee)
-        upload = SimpleUploadedFile("shelter-photo.heic", make_heic(), content_type="image/heic")
+        upload = SimpleUploadedFile(
+            "shelter-photo.heic", make_heic(), content_type="image/heic"
+        )
         response = self.client.post(
             reverse("animal_edit", args=[self.available.pk]),
             self.animal_form_data(photos=upload, make_new_primary="1"),
@@ -554,23 +887,42 @@ class TailTrailsTests(TestCase):
     def test_photo_input_is_disabled_at_five_existing_photos(self):
         self.login(self.employee)
         for position in range(2, 5):
-            AnimalPhoto.objects.create(animal=self.available, external_url=f"https://example.com/{position}.jpg", position=position)
+            AnimalPhoto.objects.create(
+                animal=self.available,
+                external_url=f"https://example.com/{position}.jpg",
+                position=position,
+            )
         editor = self.client.get(reverse("animal_edit", args=[self.available.pk]))
-        self.assertTrue(editor.context["form"].fields["photos"].widget.attrs["disabled"])
+        self.assertTrue(
+            editor.context["form"].fields["photos"].widget.attrs["disabled"]
+        )
         self.assertContains(editor, "Maximum reached")
-        self.assertContains(editor, "data-photo-limit-reached=\"true\"")
+        self.assertContains(editor, 'data-photo-limit-reached="true"')
 
     def test_selecting_two_photos_with_four_existing_keeps_server_error(self):
         self.login(self.employee)
-        AnimalPhoto.objects.create(animal=self.available, external_url="https://example.com/three.jpg", position=2)
-        AnimalPhoto.objects.create(animal=self.available, external_url="https://example.com/four.jpg", position=3)
+        AnimalPhoto.objects.create(
+            animal=self.available,
+            external_url="https://example.com/three.jpg",
+            position=2,
+        )
+        AnimalPhoto.objects.create(
+            animal=self.available,
+            external_url="https://example.com/four.jpg",
+            position=3,
+        )
         uploads = [
             SimpleUploadedFile("one.png", PNG_BYTES, content_type="image/png"),
             SimpleUploadedFile("two.png", PNG_BYTES, content_type="image/png"),
         ]
-        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.animal_form_data(photos=uploads))
+        response = self.client.post(
+            reverse("animal_edit", args=[self.available.pk]),
+            self.animal_form_data(photos=uploads),
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "An animal gallery can contain no more than five photos.")
+        self.assertContains(
+            response, "An animal gallery can contain no more than five photos."
+        )
         self.assertContains(response, 'class="field-error-list"')
         self.assertEqual(self.available.photos.count(), 4)
 
@@ -585,19 +937,30 @@ class TailTrailsTests(TestCase):
         self.assertIn("request.upload.addEventListener('progress'", script)
         self.assertIn("Upload progress will begin when you save.", script)
         self.assertIn("Overall upload:", script)
-        self.assertIn("All ${fileCount} ${fileNoun} uploaded. Processing images", script)
+        self.assertIn(
+            "All ${fileCount} ${fileNoun} uploaded. Processing images", script
+        )
         self.assertIn("new DOMParser().parseFromString", script)
         self.assertIn("initializePhotoEditors();", script)
 
     def test_successful_multi_upload_opens_crop_workspace_with_live_deadline(self):
         self.login(self.employee)
         uploads = [
-            SimpleUploadedFile("one.png", make_png((400, 300), (30, 90, 150)), content_type="image/png"),
-            SimpleUploadedFile("two.png", make_png((300, 500), (160, 80, 30)), content_type="image/png"),
+            SimpleUploadedFile(
+                "one.png", make_png((400, 300), (30, 90, 150)), content_type="image/png"
+            ),
+            SimpleUploadedFile(
+                "two.png", make_png((300, 500), (160, 80, 30)), content_type="image/png"
+            ),
         ]
-        response = self.client.post(reverse("animal_edit", args=[self.available.pk]), self.animal_form_data(photos=uploads))
+        response = self.client.post(
+            reverse("animal_edit", args=[self.available.pk]),
+            self.animal_form_data(photos=uploads),
+        )
         self.assertEqual(response.status_code, 302)
-        batch = PhotoUploadBatch.objects.get(user=self.employee, status=PhotoUploadBatch.Status.PENDING)
+        batch = PhotoUploadBatch.objects.get(
+            user=self.employee, status=PhotoUploadBatch.Status.PENDING
+        )
         self.assertEqual(batch.photos.count(), 2)
         crop_page = self.client.get(response.url)
         self.assertContains(crop_page, "Crop 2 photos")
@@ -613,8 +976,13 @@ class TailTrailsTests(TestCase):
 
     def test_expired_photo_batches_are_cleaned_with_private_files(self):
         self.login(self.employee)
-        upload = SimpleUploadedFile("temporary.png", PNG_BYTES, content_type="image/png")
-        self.client.post(reverse("animal_edit", args=[self.available.pk]), self.animal_form_data(photos=upload))
+        upload = SimpleUploadedFile(
+            "temporary.png", PNG_BYTES, content_type="image/png"
+        )
+        self.client.post(
+            reverse("animal_edit", args=[self.available.pk]),
+            self.animal_form_data(photos=upload),
+        )
         batch = PhotoUploadBatch.objects.get(user=self.employee)
         pending = batch.photos.get()
         path = pending.original.path
@@ -628,7 +996,10 @@ class TailTrailsTests(TestCase):
     def test_cancelled_photo_batch_is_discarded_immediately(self):
         self.login(self.volunteer)
         upload = SimpleUploadedFile("cancel.png", PNG_BYTES, content_type="image/png")
-        self.client.post(reverse("submit_update", args=[self.available.pk]), {"observations": "Cancel me", "photos": upload})
+        self.client.post(
+            reverse("submit_update", args=[self.available.pk]),
+            {"observations": "Cancel me", "photos": upload},
+        )
         batch = PhotoUploadBatch.objects.get(user=self.volunteer)
         path = batch.photos.get().original.path
         response = self.client.post(reverse("photo_batch_cancel", args=[batch.pk]))
@@ -639,11 +1010,14 @@ class TailTrailsTests(TestCase):
     def test_cancelling_staff_batch_preserves_existing_gallery_changes(self):
         self.login(self.employee)
         existing = self.available.photos.first()
-        upload = SimpleUploadedFile("replacement.png", PNG_BYTES, content_type="image/png")
+        upload = SimpleUploadedFile(
+            "replacement.png", PNG_BYTES, content_type="image/png"
+        )
         response = self.client.post(
             reverse("animal_edit", args=[self.available.pk]),
             self.animal_form_data(photos=upload, remove_photo=str(existing.pk)),
         )
+        self.assertEqual(response.status_code, 302)
         batch = PhotoUploadBatch.objects.get(user=self.employee)
         self.assertTrue(self.available.photos.filter(pk=existing.pk).exists())
         self.client.post(reverse("photo_batch_cancel", args=[batch.pk]))
@@ -699,7 +1073,9 @@ class TailTrailsTests(TestCase):
 
     @override_settings(MAX_PHOTO_SIZE_MB=1)
     def test_per_file_photo_limit_is_enforced(self):
-        oversized = SimpleUploadedFile("oversized.png", b"x" * (1024 * 1024 + 1), content_type="image/png")
+        oversized = SimpleUploadedFile(
+            "oversized.png", b"x" * (1024 * 1024 + 1), content_type="image/png"
+        )
         form = AnimalForm(
             data=self.animal_form_data(),
             files=MultiValueDict({"photos": [oversized]}),
@@ -710,8 +1086,13 @@ class TailTrailsTests(TestCase):
 
     def test_volunteer_submission_photos_are_converted_and_original_retained(self):
         self.login(self.volunteer)
-        upload = SimpleUploadedFile("volunteer.png", PNG_BYTES, content_type="image/png")
-        response = self.client.post(reverse("submit_update", args=[self.available.pk]), {"observations":"New photo", "photos":upload})
+        upload = SimpleUploadedFile(
+            "volunteer.png", PNG_BYTES, content_type="image/png"
+        )
+        response = self.client.post(
+            reverse("submit_update", args=[self.available.pk]),
+            {"observations": "New photo", "photos": upload},
+        )
         self.assertEqual(response.status_code, 302)
         self.finalize_latest_batch(self.volunteer)
         photo = SubmissionPhoto.objects.get(submission__user=self.volunteer)
@@ -720,10 +1101,32 @@ class TailTrailsTests(TestCase):
         self.assertTrue(photo.image.name.endswith(".jpg"))
 
     def test_volunteer_can_track_only_their_own_submission_statuses(self):
-        approved = Submission.objects.create(animal=self.available, user=self.volunteer, observations="Friendly", status="Approved")
-        rejected = Submission.objects.create(animal=self.hidden, user=self.volunteer, observations="Old note", status="Rejected", rejection_reason="Please add more detail")
-        other = User.objects.create_user(username="other@test.com", email="other@test.com", password="Trail123!", full_name="Other Volunteer", phone="555-0199", role="Volunteer")
-        Submission.objects.create(animal=self.available, user=other, observations="Must remain private to its submitter")
+        approved = Submission.objects.create(
+            animal=self.available,
+            user=self.volunteer,
+            observations="Friendly",
+            status="Approved",
+        )
+        rejected = Submission.objects.create(
+            animal=self.hidden,
+            user=self.volunteer,
+            observations="Old note",
+            status="Rejected",
+            rejection_reason="Please add more detail",
+        )
+        other = User.objects.create_user(
+            username="other@test.com",
+            email="other@test.com",
+            password="Trail123!",
+            full_name="Other Volunteer",
+            phone="555-0199",
+            role="Volunteer",
+        )
+        Submission.objects.create(
+            animal=self.available,
+            user=other,
+            observations="Must remain private to its submitter",
+        )
         self.login(self.volunteer)
         pending_page = self.client.get(reverse("submissions"))
         self.assertContains(pending_page, "My submissions")
@@ -744,10 +1147,13 @@ class TailTrailsTests(TestCase):
         self.assertContains(page, "they do not reserve gallery space")
 
     def test_staff_submission_review_shows_candidate_and_official_photos(self):
-        submission = Submission.objects.create(animal=self.available, user=self.volunteer, observations="Photo update")
-        candidate = store_photo_upload(
+        submission = Submission.objects.create(
+            animal=self.available, user=self.volunteer, observations="Photo update"
+        )
+        candidate = store_cropped_photo(
             SubmissionPhoto(submission=submission),
-            SimpleUploadedFile("candidate.png", PNG_BYTES, content_type="image/png"),
+            PNG_BYTES,
+            "candidate.png",
         )
         self.login(self.employee)
         page = self.client.get(reverse("submissions"))
@@ -756,14 +1162,21 @@ class TailTrailsTests(TestCase):
         self.assertContains(page, "Current official gallery")
         self.assertContains(page, 'name="approve_photo"')
         self.assertContains(page, 'name="replace_photo"', count=2)
-        self.assertContains(page, reverse("original_photo", args=["submission", candidate.pk]))
+        self.assertContains(
+            page, reverse("original_photo", args=["submission", candidate.pk])
+        )
 
     def test_approval_can_select_candidate_subset_and_rechecks_capacity(self):
-        submission = Submission.objects.create(animal=self.available, user=self.volunteer, observations="Several candidates")
+        submission = Submission.objects.create(
+            animal=self.available,
+            user=self.volunteer,
+            observations="Several candidates",
+        )
         candidates = [
-            store_photo_upload(
+            store_cropped_photo(
                 SubmissionPhoto(submission=submission),
-                SimpleUploadedFile(f"candidate-{number}.png", make_png((20, 20), (number * 30, 80, 120)), content_type="image/png"),
+                make_png((20, 20), (number * 30, 80, 120)),
+                f"candidate-{number}.png",
             )
             for number in range(1, 5)
         ]
@@ -785,43 +1198,37 @@ class TailTrailsTests(TestCase):
         self.assertEqual(submission.status, "Approved")
         self.assertEqual(self.available.photos.count(), 5)
 
-    def test_legacy_uploaded_photo_is_backfilled(self):
-        legacy = AnimalPhoto.objects.create(animal=self.hidden, image=SimpleUploadedFile("legacy.png", PNG_BYTES, content_type="image/png"))
-        self.assertFalse(legacy.original_image)
-        call_command("reprocess_photos", verbosity=0)
-        legacy.refresh_from_db()
-        self.assertTrue(legacy.original_image.name.endswith(".png"))
-        self.assertTrue(legacy.image.name.endswith(".jpg"))
-
-    @override_settings(PHOTO_WEB_SIZE=(800, 600))
-    def test_all_photos_can_be_regenerated_from_retained_originals(self):
-        upload = SimpleUploadedFile("portrait.png", make_png((300, 900), (40, 90, 180)), content_type="image/png")
-        photo = store_photo_upload(AnimalPhoto(animal=self.hidden, position=3), upload)
-        old_web_name = photo.image.name
-        call_command("reprocess_photos", "--all", verbosity=0)
-        photo.refresh_from_db()
-        self.assertNotEqual(photo.image.name, old_web_name)
-        self.assertTrue(photo.original_image)
-        with Image.open(photo.image.path) as web_image:
-            self.assertEqual(web_image.size, (600, 800))
-
     def test_submission_approval_updates_record(self):
-        submission = Submission.objects.create(animal=self.available, user=self.volunteer, observations="Calm during brushing")
+        submission = Submission.objects.create(
+            animal=self.available,
+            user=self.volunteer,
+            observations="Calm during brushing",
+        )
         self.login(self.employee)
-        response = self.client.post(reverse("review_submission", args=[submission.pk, "approve"]))
+        response = self.client.post(
+            reverse("review_submission", args=[submission.pk, "approve"])
+        )
         self.assertEqual(response.status_code, 302)
-        submission.refresh_from_db(); self.available.refresh_from_db()
+        submission.refresh_from_db()
+        self.available.refresh_from_db()
         self.assertEqual(submission.status, "Approved")
         self.assertIn("Calm during brushing", self.available.behavior_notes)
 
     def test_reverse_proxy_prefix(self):
         from config.wsgi import application
         from django.test.client import RequestFactory
-        environ = RequestFactory().get("/", HTTP_X_FORWARDED_PREFIX="/tail-trails").environ
+
+        environ = (
+            RequestFactory().get("/", HTTP_X_FORWARDED_PREFIX="/tail-trails").environ
+        )
         headers = {}
-        def start_response(status, response_headers): headers["status"] = status
+
+        def start_response(status, response_headers):
+            headers["status"] = status
+
         body = b"".join(application(environ, start_response)).decode()
         from django.urls import set_script_prefix
+
         set_script_prefix("/")
         self.assertTrue(headers["status"].startswith("200"))
         self.assertIn('href="/tail-trails/animals"', body)
@@ -829,7 +1236,9 @@ class TailTrailsTests(TestCase):
     def test_health(self):
         health = self.client.get(reverse("healthz")).json()
         self.assertEqual(health["status"], "ok")
-        self.assertEqual(settings.APP_VERSION, (settings.BASE_DIR / "VERSION").read_text().strip())
+        self.assertEqual(
+            settings.APP_VERSION, (settings.BASE_DIR / "VERSION").read_text().strip()
+        )
         self.assertEqual(health["version"], settings.APP_VERSION)
 
     def test_version_file_is_the_only_runtime_version_source(self):
@@ -872,24 +1281,30 @@ class TailTrailsTests(TestCase):
         self.assertContains(page, "Swap source")
         self.assertContains(page, "container-visible snapshots")
         self.assertEqual(page.context["refresh_interval"], 5)
-        self.assertContains(page, 'data-system-refresh-form')
+        self.assertContains(page, "data-system-refresh-form")
         self.assertContains(page, 'value="5" selected')
         self.assertEqual(
-            self.client.get(reverse("system_information"), {"refresh": "2"}).context["refresh_interval"],
+            self.client.get(reverse("system_information"), {"refresh": "2"}).context[
+                "refresh_interval"
+            ],
             2,
         )
         self.assertEqual(
-            self.client.get(reverse("system_information"), {"refresh": "invalid"}).context["refresh_interval"],
+            self.client.get(
+                reverse("system_information"), {"refresh": "invalid"}
+            ).context["refresh_interval"],
             5,
         )
         self.client.force_login(self.employee)
-        self.assertEqual(self.client.get(reverse("system_information")).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("system_information")).status_code, 403
+        )
 
     def test_system_information_uses_iec_binary_units(self):
         self.assertEqual(format_bytes(1024), "1.0 KiB")
-        self.assertEqual(format_bytes(1024 ** 2), "1.0 MiB")
-        self.assertEqual(format_bytes(1024 ** 3), "1.0 GiB")
-        self.assertEqual(format_bytes(1024 ** 4), "1.0 TiB")
+        self.assertEqual(format_bytes(1024**2), "1.0 MiB")
+        self.assertEqual(format_bytes(1024**3), "1.0 GiB")
+        self.assertEqual(format_bytes(1024**4), "1.0 TiB")
         self.login(self.admin)
         page = self.client.get(reverse("system_information"))
         self.assertContains(page, "25 MiB")
@@ -897,8 +1312,13 @@ class TailTrailsTests(TestCase):
 
     def test_system_information_uses_an_admin_only_sse_stream(self):
         self.login(self.admin)
-        with patch("shelter.views._system_snapshot_html", return_value="<section>updated</section>"):
-            stream = self.client.get(reverse("system_information_stream"), {"refresh": "2"})
+        with patch(
+            "shelter.views._system_snapshot_html",
+            return_value="<section>updated</section>",
+        ):
+            stream = self.client.get(
+                reverse("system_information_stream"), {"refresh": "2"}
+            )
             self.assertEqual(stream.status_code, 200)
             self.assertEqual(stream["Content-Type"], "text/event-stream")
             self.assertEqual(stream["Cache-Control"], "no-cache, no-transform")
@@ -917,12 +1337,18 @@ class TailTrailsTests(TestCase):
 
         javascript = (settings.BASE_DIR / "static" / "app.js").read_text()
         self.assertIn("new EventSource", javascript)
-        self.assertNotIn("window.location.reload()", javascript.split("const systemRefreshForm =")[1])
+        self.assertNotIn(
+            "window.location.reload()", javascript.split("const systemRefreshForm =")[1]
+        )
 
         self.client.force_login(self.employee)
-        self.assertEqual(self.client.get(reverse("system_information_stream")).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("system_information_stream")).status_code, 403
+        )
         self.client.logout()
-        self.assertEqual(self.client.get(reverse("system_information_stream")).status_code, 401)
+        self.assertEqual(
+            self.client.get(reverse("system_information_stream")).status_code, 401
+        )
 
     def test_git_workflow_is_separate_and_linked(self):
         readme = (settings.BASE_DIR / "README.md").read_text()
@@ -942,8 +1368,13 @@ class TailTrailsTests(TestCase):
         environment_example = (settings.BASE_DIR / ".env.example").read_text()
         self.assertIn("PHOTO_BATCH_TTL_MINUTES=30", environment_example)
         self.assertIn("PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES=60", environment_example)
-        self.assertIn('command: ["python", "manage.py", "run_photo_batch_cleanup"]', compose)
-        self.assertIn("PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES: ${PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES:-60}", compose)
+        self.assertIn(
+            'command: ["python", "manage.py", "run_photo_batch_cleanup"]', compose
+        )
+        self.assertIn(
+            "PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES: ${PHOTO_BATCH_CLEANUP_INTERVAL_MINUTES:-60}",
+            compose,
+        )
 
     def test_reverse_proxy_examples_use_the_https_subdomain_layout(self):
         nginx = (settings.BASE_DIR / "nginx.example.conf").read_text()
@@ -959,5 +1390,7 @@ class TailTrailsTests(TestCase):
         self.assertIn("proxy_buffering off", nginx)
         self.assertNotIn("X-Forwarded-Prefix", nginx)
         self.assertIn("<VirtualHost *:80>", apache)
-        self.assertIn("RewriteRule ^ https://tailtrails.exampleshelter.com%{REQUEST_URI}", apache)
+        self.assertIn(
+            "RewriteRule ^ https://tailtrails.exampleshelter.com%{REQUEST_URI}", apache
+        )
         self.assertIn("<VirtualHost *:443>", apache)
