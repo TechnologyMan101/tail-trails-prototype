@@ -70,7 +70,7 @@ class Animal(models.Model):
     STATUSES = [(x, x) for x in ("Available", "Pending Adoption", "Not Available", "Deceased")]
     SEXES = [(x, x) for x in ("Male", "Female", "Unknown")]
     LOCATIONS = [(x, x) for x in ("Kennel", "Foster Home")]
-    SPAY = [(x, x) for x in ("Spayed/Neutered", "Not Spayed/Neutered", "Unknown", "Nursing")]
+    SPAY = [(x, x) for x in ("Spayed/Neutered", "Not Spayed/Neutered", "Nursing", "Unknown")]
     animal_id = models.CharField(max_length=20, unique=True, editable=False)
     name = models.CharField(max_length=100)
     species = models.CharField(max_length=20, choices=SPECIES)

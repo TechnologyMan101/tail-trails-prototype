@@ -232,6 +232,8 @@ Migration 0011 merges Blue/Gray and Red/Orange aliases and preserves retired col
 
 ## Local development and tests
 
+Form layout refinements keep conditional intake location and foster phone rows full width, and gray only the ID area inside the microchip panel. Color-grid styling is scoped to its container so native checkboxes remain visible and selectable. Weight and height use decimal text controls with numeric keyboard hints: scroll-wheel movement does not change values, minus signs and invalid pastes are blocked in the browser, and server validation also rejects negative values. Spay/neuter choices put Unknown last. Migration 0012 records that choice ordering without changing stored statuses.
+
 PostgreSQL is used in Compose. Tests can use an isolated SQLite database for speed:
 
 ```bash

@@ -45,6 +45,8 @@ class AnimalForm(forms.ModelForm):
             self.initial["color"] = [s.strip() for s in (self.instance.color or "").split(",") if s.strip()]
         self.fields["weight"].help_text = "Kilograms; up to three decimal places (0.001 kg = 1 g)."
         self.fields["height"].help_text = "Centimeters; one decimal place (0.1 cm = 1 mm)."
+        for name, precision in (("weight", 3), ("height", 1)):
+            self.fields[name].widget = forms.TextInput(attrs={"inputmode": "decimal", "data-nonnegative-decimal": str(precision), "pattern": rf"[0-9]*[.]?[0-9]{{0,{precision}}}", "autocomplete": "off"})
         value = lambda name: self.data.get(name, "") if self.is_bound else self.initial.get(name, getattr(self.instance, name, ""))
         conditions = {
             "intake_location": value("intake_type") == "Stray",

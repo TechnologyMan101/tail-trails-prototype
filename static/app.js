@@ -95,6 +95,16 @@ if (gallery) {
 const initializePhotoEditor = (photoEditor) => {
   if (!photoEditor || photoEditor.dataset.uploadInitialized === 'true') return;
   photoEditor.dataset.uploadInitialized = 'true';
+  $$('[data-nonnegative-decimal]', photoEditor).forEach((input) => {
+    const valid = new RegExp(`^\\d*(?:\\.\\d{0,${Number(input.dataset.nonnegativeDecimal)}})?$`);
+    let previous = input.value;
+    input.addEventListener('beforeinput', (event) => { if (event.data && /[-+eE]/.test(event.data)) event.preventDefault(); });
+    input.addEventListener('input', () => {
+      if (valid.test(input.value)) previous = input.value;
+      else input.value = previous;
+    });
+    input.addEventListener('blur', () => { if (input.value === '.') { input.value = ''; previous = ''; } });
+  });
   const animalValue = (name) => {
     const control = $(`[name="${name}"]`, photoEditor);
     return control?.type === 'checkbox' ? control.checked : control?.value;

@@ -263,6 +263,14 @@ class TailTrailsTests(TestCase):
         self.assertFalse(invalid.is_valid())
         self.assertIn("weight", invalid.errors)
         self.assertIn("height", invalid.errors)
+        negative = AnimalForm(data=self.animal_form_data(weight="-1", height="-1"), user=self.employee)
+        self.assertFalse(negative.is_valid())
+        self.assertIn("weight", negative.errors)
+        self.assertIn("height", negative.errors)
+        for name in ("weight", "height"):
+            self.assertEqual(form.fields[name].widget.input_type, "text")
+            self.assertEqual(form.fields[name].widget.attrs["inputmode"], "decimal")
+        self.assertEqual(list(form.fields["spay_status"].choices)[-1], ("Unknown", "Unknown"))
 
     def test_foster_contact_information_is_staff_only(self):
         Animal.objects.filter(pk=self.available.pk).update(held_at="Foster Home", foster_phone="619-555-0199", foster_address="Private Foster Address")
